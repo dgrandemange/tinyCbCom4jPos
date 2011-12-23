@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+
+<!DOCTYPE isopackager PUBLIC "-//JPOS/Generic Packager DTD//EN" "packager/genericpackager.dtd">
+
+<isopackager>
+
+	<isofield id="0" length="4" name="Message type" pad="true"
+		class="org.jpos.iso.IFB_NUMERIC" />
+
+	<isofield id="1" length="16" name="Bit Map, Extended" class="org.jpos.iso.IFB_BITMAP" />
+
+	<isofield id="2" length="19" name="Primary Account Number"
+		pad="true" class="org.jpos.iso.IFB_LLHNUM" />
+
+	<isofield id="3" length="6" name="Processing Code" pad="true"
+		class="org.jpos.iso.IFB_NUMERIC" />
+
+	<isofield id="4" length="12" name="Amount, Transaction" pad="true"
+		class="org.jpos.iso.IFB_NUMERIC" />
+
+	<isofield id="7" length="10" name="Transmission datetime (MMJJhhmmss)"
+		pad="true" class="org.jpos.iso.IFB_NUMERIC" />
+
+	<isofield id="11" length="6" name="Systems Trace Audit Number"
+		pad="true" class="org.jpos.iso.IFB_NUMERIC" />
+
+	<isofield id="12" length="6" name="Time, Local Transaction"
+		pad="true" class="org.jpos.iso.IFB_NUMERIC" />
+
+	<isofield id="13" length="4" name="Date, Local Transaction"
+		pad="true" class="org.jpos.iso.IFB_NUMERIC" />
+
+	<isofield id="14" length="4" name="Card expiry date" pad="true"
+		class="org.jpos.iso.IFB_NUMERIC" />
+
+	<isofield id="37" name="Retrieval reference number" length="12"
+		class="org.jpos.iso.IF_CHAR" />
+
+	<isofield id="38" name="Authorization identification response"
+		length="6" class="org.jpos.iso.IF_CHAR" />
+
+	<isofield id="39" name="Response Code" length="2"
+		class="org.jpos.iso.IF_CHAR" />
+
+	<isofield id="41" length="8" 
+		name="Card acceptor terminal identification" class="org.jpos.iso.IF_CHAR" />
+
+	<isofield id="42" length="15" name="Card acceptor identification code"
+		class="org.jpos.iso.IF_CHAR" />
+
+	<isofield id="49" length="3" name="Currency code, Transaction"
+		class="org.jpos.iso.IFB_NUMERIC" pad="true" />
+
+</isopackager>

@@ -1,0 +1,46 @@
+String convertAmountToCodeRep(String amount) {
+	int codeRep = 01;
+
+	if (null != amount) {
+		String lastDigits;
+		amount = amount.trim();
+		int length = amount.length();
+		if (1 == length) {
+			lastDigits = amount.substring(0, 1);
+		} else {
+			lastDigits = amount.substring((length - 2), length);
+		}
+
+		try {
+			codeRep = Integer.parseInt(lastDigits);
+		} catch (Exception e) {
+		}
+
+	}
+
+	return String.format("%02d", new Object[] {codeRep});
+}
+
+String MTI = message.getMTI();
+
+if ("0100".equals(MTI)) {
+	message.setResponseMTI();	
+	
+	String codeRep = convertAmountToCodeRep(message.getString(4));
+	
+	if ("00".equals(codeRep)) {
+		message.set(38, (new java.text.SimpleDateFormat("mmHHss")).format(new Date()));
+	}
+	
+	message.set(39, codeRep);
+	
+	// TODO Complete according to your needs ...
+	
+	source.send(message);
+} else {
+	message.setResponseMTI();
+	
+	// TODO Complete according to your needs ...
+	
+	source.send(message);
+}

@@ -1,0 +1,38 @@
+<server class="org.jpos.q2.iso.QServer" logger="Q2" name="cbcomDummyServer">
+
+	<attr name="port" type="java.lang.Integer">11019</attr>
+	
+	<attr name="minSessions" type="java.lang.Integer">100</attr>
+	<attr name="maxSessions" type="java.lang.Integer">2000</attr>
+
+	<channel class="org.jpos.iso.channel.CBCOMChannel" logger="Q2"
+		packager="org.jpos.iso.packager.GenericPackager">
+		<property name="packager-config" value="cfg/dummy-packager.xml" />
+		
+		<!-- ======================================================================== -->
+		<!-- BEGIN Pseudo session timers config (time unit=seconds)                   -->
+		<!-- ======================================================================== -->
+				
+		<!-- Timer TSI ("Timer de Surveillance d'Inactivité") : Inactivity veil timer -->
+		<!-- _________________________________________________________________________ -->
+		
+		<!-- Default inactivity veil timer (CB2A specs preconize 780s / 13 mn ) -->
+		<property name="timer-TSI-default" value="10" />
+		
+		<!-- Min inactivity veil timer (CB2A specs preconize 120s / 2mn ) -->
+		<property name="timer-TSI-min" value="1" />
+		
+		<!-- Max inactivity veil timer (CB2A specs preconize 1800s / 30mn ) -->
+		<property name="timer-TSI-max" value="30" />
+		
+		<!-- ======================================================================== -->
+		<!-- END   Pseudo session timers config                                       -->
+		<!-- ======================================================================== -->		
+		
+	</channel>
+
+	<request-listener class="org.jpos.bsh.BSHRequestListener" logger="Q2">
+		<property name="source" value="cfg/cbcom-simulator.bsh" />
+	</request-listener>
+	
+</server>
