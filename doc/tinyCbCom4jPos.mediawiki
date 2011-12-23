@@ -11,7 +11,7 @@ Still it provides some components to deal with IPDU, PI ... as long as a jPos CB
 = About CBCOMChannel implementation design =
 All the CBCOM management is made within the CBCOMChannel class. In other words, all the the CBCOM logic and pseudo-session management stay within this class. 
 JPos components such as ISOServer or ISORequestListener do not know a thing about CBCOM, which is good.
-It is only when the CBCOMChannel receives an IPDU-DE (wrapping an APDU that is the ISO-8583 message) that it relays this APDU as an ISOMsg it to the ISOServer. The ISOServer then may route it to some ISORequestListener. Actually, this APDU is the only interesting thing here, other message have non business value.
+It is only when the CBCOMChannel receives an IPDU-DE (wrapping an APDU that is the ISO-8583 message) that it relays this APDU as an ISOMsg to the ISOServer. The ISOServer then may route it to some ISORequestListener. Actually, this APDU is the only interesting thing here, other IPDU messages have non business value really.
 
 == Pseudo-session state management and implementation design ==
 In this implementation, CBCOM pseudo session can take 3 states among {''Initial'', ''Connected'', ''LoggedOff''}.
