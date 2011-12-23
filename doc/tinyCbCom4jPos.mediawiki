@@ -2,7 +2,7 @@
 CBCOM management as long as pseudo session management over CB2A is a real plague. But, well, hum, it is here and we have no choice but to deal with it. 
 So, here is some jPos module dedicated to the CBCOM layer and its pseudo session management. 
 It may be useful to mount a lightweight CBCOM simulator for testing purpose. (If you seek for some really robust simulators, and if you are full of money, you may take a look at Integri, KANEST solutions). 
-Actual implementation does not deal with all the ''network management'' part (the one part of CBCOM-CB2A specifications that cares about maintaining connections once the pseudo-session is established).
+This implementation does not deal with all the ''network management'' part (the one part of CBCOM-CB2A specifications that cares about maintaining connections once the pseudo-session is established).
 Still it provides all the components to deal with IPDU, PI, ... as long as a CBCOMChannel that integrates in a jPos server deployment configuration. You may find a sample in ''jpos/modules/cbcomSimulator'' for such integration, as long as a client sample code in ''src/testIntegration/CBCOMclientTest.java''.
 
 = About CBCOMChannel implementation design =
@@ -21,5 +21,3 @@ So back to our CBCOMChannel : when it receives some messages, it extracts the IP
 Thanks to this design, pseudo-session management and logic are delegated from the CBCOM channel to the 3 states implementations.
 
 But, as these implementations may at one time need the underlying CBCOMChannel, a callback interface is provided to them that allows to give back the control to the CBCOM channel. This callback interface concentrate on CBCOMChannel main purpose that is : sending something over the socket, processing the APDU (processing will actually be delegated to some ISORequestListener), closing itself...
-
-     
