@@ -1,0 +1,25 @@
+= Introduction =
+CBCOM management as long as pseudo session management over CB2A is a real plague. But, well, hum, it is here and we have no choice but to deal with it. 
+So, here is some jPos module dedicated to the CBCOM layer and its pseudo session management. 
+It may be useful to mount a lightweight CBCOM simulator for testing purpose. (If you seek for some really robust simulators, and if you are full of money, you may take a look at Integri, KANEST solutions). 
+Actual implementation does not deal with all the ''network management'' part (the one part of CBCOM-CB2A specifications that cares about maintaining connections once the pseudo-session is established).
+Still it provides all the components to deal with IPDU, PI, ... as long as a CBCOMChannel that integrates in a jPos server deployment configuration. You may find a sample in ''jpos/modules/cbcomSimulator'' for such integration, as long as a client sample code in ''src/testIntegration/CBCOMclientTest.java''.
+
+= About CBCOMChannel implementation design =
+All the CBCOM management is made in CBCOMChannel class. In other words, all the the CBCOM logic and pseudo-session management stay within this class. 
+JPos components such as ISOServer or ISORequestListener do not know a thing about CBCOM, which is good in my point of view.
+It is only when the CBCOMChannel receives an IPDU-DE (wrapping an APDU that is the ISO-8583 message) that it relays this APDU as an ISOMsg it to the ISOServer. The ISOServer then may route it to some ISORequestListener.
+
+== Pseudo-session state management and implementation design ==
+In this implementation, CBCOM pseudo session can take 3 states among {''Initial'', ''Connected'', ''LoggedOff''}.
+State may change when receiving a connection request (IPDU-CN), or abort request (IPDU-AB).
+Besides, some requests are not expected depending on the current pseudo-session state. For instance, you can't send a data request (IPDU-DE) while your sate is not connected (that is the server has not yet received a connection request IPDU-CN from client and answered a connection acknowledge IPDU-AC back to the client).
+
+To handle all of these rules, the CBCOMChannel wraps a pseudo-session context. This pseudo-session context itself wraps a state that is the current pseudo-session state for the parent CBCOMChannel. 
+This state may be an instance among the 3 states mentioned above. all the 3 states  implement the ''IPseudoSessionState'' interface according to the famous ''state design pattern'' : in such design, the ''IPseudoSessionState'' interface methods actually represents all the events that can occur against a pseudo-session state. We can see these method as potential transitions between the 3 states.
+So back to our CBCOMChannel : when it receives some messages, it extracts the IPDU from it, an invoke the associated transition/method on the current state it is wrapping in its pseudo session context. 
+Thanks to this design, pseudo-session management and logic are delegated from the CBCOM channel to the 3 states implementations.
+
+But, as these implementations may at one time need the underlying CBCOMChannel, a callback interface is provided to them that allows to give back the control to the CBCOM channel. This callback interface concentrate on CBCOMChannel main purpose that is : sending something over the socket, processing the APDU (processing will actually be delegated to some ISORequestListener), closing itself...
+
+     
