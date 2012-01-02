@@ -1,27 +1,111 @@
 = Introduction =
 If you once worked with CBCOM, you know that CBCOM layer management as long as pseudo-session management over CB2A is a real pain. But, well, it is here, and we have no choice but to deal with it.
  
-Well, here is some jPos module dedicated to the CBCOM layer and its pseudo session management. 
-It may be useful to mount a lightweight CBCOM simulator for testing purpose. (If you seek for some really robust simulators, and if you are full of money, you may take a look at Integri, KANEST solutions). 
+Well, here is a jPos ''jpos/modules/cbcom'' module dedicated to the CBCOM layer and its pseudo session management. 
+It not only provides some components to deal with CBCOM concepts such as IPDU, PI but also a jPos CBCOMChannel.
+This is a a CBCOM over TCP/IP channel implementation, base on jPos BaseChannel,  that can endorse either a client role, either a server role. 
 
-This implementation does not deal with all the ''network management'' part (the one part of CBCOM-CB2A specifications that cares about maintaining connections once the pseudo-session is established).
-Still it provides some components to deal with IPDU, PI ... as long as a jPos CBCOMChannel that integrates in a jPos server deployment configuration. You may find a sample in ''jpos/modules/cbcomSimulator'' for such integration, as long as a client sample code in ''src/testIntegration/CBCOMclientTest.java''.
+You can find two subsidiary sample modules in this project :
+* ''jpos/modules/cbcomSimulator'' : mounts a CBCOM server simulator; the CBCOM channel is wrapped in server deployment configuration,
+* ''jpos/modules/cbcomClientSimulator'' :   mounts a dummy CBCOM client; the CBCOM channel is wrapped in a channel adaptor configuration
+You may take a careful look at these two distinct channel configurations as their properties declaration may vary depending on the CBCOM channel role (client or server). 
 
+
+= Implemented features =
+== CBCOM message format ==
+All CBCOM IPDUs along their respective composition rules are implemented.
+When dealing with CBCOM messages, IPDU validity is checked against various rules (See IPDU factory ''org.jpos.jposext.cbcom.service.support.IPDUFactoryImpl'' class).   
+== Pseudo session timers ==
+=== Role client ===
+* post-connection-timer,
+* non response timer (TNR)
+NB : this implementation does not yet deal with all the network management part (the one part of CBCOM-CB2A specifications that cares about maintaining connections once the pseudo-session is established),. So, the activity maintain timer (TMA)  is not implemented.
+=== Role server ===
+* pre connection timer,
+* inter session timer,
+* response guarantee timer (TGR),
+* inactivity veil timer (TSI/TSM)
+
+
+= Some recipee =
+== Caution ==
+=== CBCOM and multiplexing ===
+Reading the CBCOM over TCP/IP specifications, requests can't be multiplexed in a CBCOM pseudo session.
+Specification says  : on one TCP/IP connection, one and one only CBCOM connection can be established. Several CBCOM connections can be established at the same time only if each of them has its own TCP/IP connection. 2 CBCOM connections mustn't share one solely TCP/IP connection.
+So, you should avoid using the CBCOMChannel in a QMUX.
+
+=== CBCOM and connection maintaining ===
+Some of the CBCOM timers care about terminating the network communication (mostly for inactivity reason).
+Therefore it's quite paradoxical using the CBCOMChannel  with a ChannelAdaptor. Indeed, ChannelAdaptor's one purpose is to maintain the connection. But, considering CBCOM, this aspect should stay at the CBCOM level.
+
+NB : in the provided ''jpos/module/cbcomClientSimulator'' sample module, a ChannelAdaptor wraps a CBCOMChannel to act as a demo client. Launch it, and you will see that after some time of inactivity, the CBCOMChannel connection closes itself. Once this is done, the ChannelAdaptor reconnects it after ''reconnect-delay'' seconds. 
+
+== Creating a CBCOM client to request a distant CBCOM server ==
+Comparing to jPos existing channels, nothing changes in the way you use the CBCOMChannel.
+ 
+You first instantiate the channel, connect to the server, send your message, wait for response, process it, and finally disconnect.
+The only thing to care about is to properly configure your instantiated channel with all the required CBCOM properties. As previously said, these properties vary upon the role your channel will endorse (client/server). You may take a further look at the sample modules for more details. 
+
+<pre>
+		channel = new CBCOMChannel(CBCOM_SERVER_HOSTNAME, CBCOM_SERVER_PORT,	packager);
+
+		cfg = new SimpleConfiguration();
+		cfg.put("cbcom-protocol-version", "12");
+		cfg.put("cb2a-protocol-version", "123");
+		cfg.put("post-connection-timer", "30");				
+		cfg.put("TSI-timer", "5");
+		cfg.put("TNR-timer", "15");
+		// cfg.put("TMA-timer", "720");		
+		cfg.put("hexdump-CBCOM", "true");		
+
+		channel.connect();
+		channel.send(msg);
+		ISOMsg resp = channel.receive();
+		// Process response
+		channel.disconnect();
+</pre>  
+
+NB : full source code is available under ''src/testIntegration/org/jpos/jposext/cbcom/ClientCBCOMChannelTest.java''.
+
+=== The VetoException case ===
+As a client waiting for server response, you should handle VetoException exceptions thrown by the CBCOMChannel. These may occurred when the server decides to abort the pseudo session. In this case, the VetoException nests a CBCOMException from which you can retrieve the reason (abort code) explaining why the server has aborted the pseudo session. 
+A list of the available abort codes can be found in the CBCOM specification, in the chapter discussing about the PI01.
+
+Here follows such exception management. (See test method ''testBadCbcomVersion()'' in source ''src/testIntegration/org/jpos/jposext/cbcom/ClientCBCOMChannelTest.java'')
+<pre>
+		// Here, we force a bad cbcom protocol version
+		cfg.put("cbcom-protocol-version", "09");
+		channel.setConfiguration(cfg);
+
+		channel.connect();
+
+		try {
+			channel.send(msg);
+			channel.receive();
+			fail("A cbcom exception wrapped in a veto exception should have been thrown by channel");
+			channel.disconnect();
+		} catch (VetoException e) {
+			assertEquals(CBCOMException.class, e.getNested().getClass());
+			assertEquals(0x1E, ((CBCOMException) e.getNested()).getPI01Value());
+		}
+</pre>
+
+== Creating a CBCOM server to serve CBCOM client(s) ==
+Once again, nothing changes in the way you configure a CBCOM channel in a server deployment configuration, except that you have to declare some complementary properties required when using a CBCOMchannel in a server way.
+You may take a further look at the provided  ''jpos/modules/cbcomSimulator'' sample module.
 
 = About CBCOMChannel implementation design =
 All the CBCOM management is made within the CBCOMChannel class. In other words, all the the CBCOM logic and pseudo-session management stay within this class. 
 JPos components such as ISOServer or ISORequestListener do not know a thing about CBCOM, which is good.
 It is only when the CBCOMChannel receives an IPDU-DE (wrapping an APDU that is the ISO-8583 message) that it relays this APDU as an ISOMsg to the ISOServer. The ISOServer then may route it to some ISORequestListener. Actually, this APDU is the only interesting thing here, other IPDU messages have non business value really.
 
-== Pseudo-session state management and implementation design ==
+== Pseudo-session state management ==
 In this implementation, CBCOM pseudo session can take 3 states among {''Initial'', ''Connected'', ''LoggedOff''}.
-State may change when receiving a connection request (IPDU-CN), or abort request (IPDU-AB) and so on ...
+State may change when receiving an IPDU : connection request, connection acknowledge, data request, abort request ... Some requests aren't expected depending on the current pseudo-session state. For instance, a client shoudn't send a data request (IPDU-DE) while server pseudo-session sate is ''Initial'' (i.e.  the server has not yet received a connection request IPDU-CN from client and answered back a connection acknowledge IPDU-AC).
 
-In the same time, some requests aren't expected depending on the current pseudo-session state. For instance, a client shoudn't send a data request (IPDU-DE) while pseudo-session sate is ''Initial'' (that is the server has not yet received a connection request IPDU-CN from client and answered back a connection acknowledge IPDU-AC).
-
-To handle all of these workflow rules, the CBCOMChannel wraps a pseudo-session context. This pseudo-session context itself wraps a state that is the current pseudo-session state for the parent CBCOMChannel. 
+To handle all of these workflow rules, the CBCOMChannel wraps a pseudo-session context. Within it, a state attribute wraps the current CBCOM pseudo-session state.  
 This state may be an instance among the 3 states mentioned above. All the 3 states  implement the ''IPseudoSessionState'' interface according to the common ''state design pattern'' : in such design, the ''IPseudoSessionState'' interface methods actually stand for all the events that can occur against a pseudo-session state. We can see these method as potential transitions between the 3 states.
 So back to our CBCOMChannel : when it receives some messages, it extracts the IPDU from it, and invoke the associated transition/method on current state. 
 
 Working with this design, pseudo-session management and logic are delegated from the CBCOM channel to the states implementations.
-But, as these implementations may also further need the underlying CBCOMChannel, a callback interface is provided to them that allows to give back the control to the CBCOM channel. This callback interface concentrate on CBCOMChannel main purpose that is : sending something over the socket, processing the APDU, and closing itself ...
+But, as these implementations may also further need the underlying CBCOMChannel, a callback interface is provided to them that allows to give back the control to the CBCOM channel. This callback interface concentrate on CBCOMChannel main purpose that is : sending, receiving, and closing ...
