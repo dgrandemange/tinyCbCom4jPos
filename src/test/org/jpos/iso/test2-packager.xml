@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE isopackager PUBLIC "genericpackager.dtd" "file:conf/genericpackager.dtd">
+
+	<!--
+		Definition d'un ISO packager de test servant à tester différents
+		packagers
+	-->
+
+<isopackager>
+
+	<isofield id="0" length="4" name="Message type" pad="true"
+		class="org.jpos.iso.IFB_NUMERIC" />
+
+	<isofield id="1" length="16" name="Bit Map, Extended" class="org.jpos.iso.IFB_BITMAP" />
+
+	<isofield id="2" length="19" name="Primary Account Number"
+		pad="true" class="org.jpos.iso.IFB_LLHNUM" />
+
+	<isofield id="3" length="6" name="Processing Code" pad="true"
+		class="org.jpos.iso.IFB_NUMERIC" />
+
+	<isofield id="4" length="12" name="Amount, Transaction" pad="true"
+		class="org.jpos.iso.IFB_NUMERIC" />
+
+	<isofieldpackager id="55" length="255" name="blabla"
+		emitBitmap="false" class="org.jpos.iso.IFB_LLHBINARY" packager="org.jpos.iso.ISOBinaryTLVRepeatableTypeSubFieldPackager" />
+
+	<isofieldpackager id="59" length="255" name="blabla"
+		emitBitmap="false" class="org.jpos.iso.IFB_LLHBINARY" packager="org.jpos.iso.ISOBinaryTLVRepeatableTypeSubFieldPackager" />
+
+</isopackager>
