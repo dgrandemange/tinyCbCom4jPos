@@ -123,7 +123,7 @@ public class CBCOMClientTest extends TestCase {
 	@Override
 	protected void setUp() throws Exception {
 		super.setUp();
-		String myPackagerXml = "jpos/modules/cbcomSimulator/cfg/dummy-packager.xml";
+		String myPackagerXml = "jpos/modules/cbcomSimulator/cfg/cb2a.xml";
 		File myPackagerFile = new File(myPackagerXml);
 		myPackager = new GenericPackagerEntityResolverAble(myPackagerFile
 				.getPath());
@@ -211,7 +211,7 @@ public class CBCOMClientTest extends TestCase {
 			e.printStackTrace();
 		}
 
-		// Send an IPDU AB (connection should then be closed by distant server)
+		// Send an IPDU AB Normal termination(connection should then be kept open by distant server)
 		byte[] bIpduReqAB = ipduAB.toBytes();
 		System.out.println(ISOUtil.hexdump(bIpduReqAB, 0, bIpduReqAB.length));
 		out.write(bIpduReqAB);
@@ -225,9 +225,10 @@ public class CBCOMClientTest extends TestCase {
 
 		try {
 			out.write(new byte[] { 0x00 });
-			fail("At this point, connection shouldn't be available anymore");
+			//fail("At this point, connection shouldn't be available anymore");
 		} catch (java.net.SocketException e) {
-			assertTrue(e.getMessage().matches("^.*Connection reset by peer.*$"));
+			fail(e.getMessage());
+			//assertTrue(e.getMessage().matches("^.*Connection reset by peer.*$"));
 		}
 
 	}
@@ -370,9 +371,10 @@ public class CBCOMClientTest extends TestCase {
 
 		try {
 			out.write(new byte[] { 0x00 });
-			fail("At this point, connection shouldn't be available anymore");
+			//fail("At this point, connection shouldn't be available anymore");
 		} catch (java.net.SocketException e) {
-			assertTrue(e.getMessage().matches("^.*Connection reset by peer.*$"));
+			fail(e.getMessage());
+			//assertTrue(e.getMessage().matches("^.*Connection reset by peer.*$"));
 		}
 	}
 
@@ -380,7 +382,7 @@ public class CBCOMClientTest extends TestCase {
 			throws UnknownHostException, IOException, CBCOMException,
 			ISOException {
 
-		// Prepare and send IPDU CN with inicactivity timer negociation
+		// Prepare and send IPDU CN with inactivity timer negociation
 		// We want to negociate a 5 seconds TSI
 		int tsi = 5;
 		byte[] pv17 = ByteBuffer.allocate(4).putInt(tsi).array();
@@ -458,5 +460,5 @@ public class CBCOMClientTest extends TestCase {
 		assertEquals(0x16, ipduResp1.findPiByPIEnum(PIEnum.PI01)
 				.getParamValue()[0]);
 	}
-
+	
 }
