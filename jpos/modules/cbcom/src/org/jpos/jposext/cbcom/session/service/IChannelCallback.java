@@ -18,16 +18,14 @@ public interface IChannelCallback {
 	/**
 	 * Send some data over channel
 	 * 
-	 * @param bIpduAC
+	 * @param bIpdu
+	 * @param doCount
+	 * @throws CBCOMSessionException
 	 */
-	void send(byte[] bIpduAC) throws CBCOMSessionException;
+	void send(byte[] bIpdu, boolean doCount) throws CBCOMSessionException;
 
 	/**
-	 * Process APDU
-	 * 
-	 * @param apdu APDU to process
-	 * @param apduLen 
+	 * @param msg
 	 */
-	void processApdu(byte[] apdu, int apduLen) throws CBCOMSessionException;
-
+	void log(String tag,Object msg);
 }

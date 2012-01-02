@@ -1,6 +1,6 @@
 package org.jpos.jposext.cbcom.exception;
 
-public class CBCOMSessionException extends Exception {
+public class CBCOMSessionException extends RuntimeException {
 
 	public CBCOMSessionException() {
 		super();

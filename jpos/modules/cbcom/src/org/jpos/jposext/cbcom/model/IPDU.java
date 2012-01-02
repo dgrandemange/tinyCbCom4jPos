@@ -116,8 +116,7 @@ public class IPDU {
 			bosRes.flush();
 			res = bosRes.toByteArray();
 		} catch (IOException e) {
-			// Should not occur
-			e.printStackTrace();
+			// Safe to ignore
 		}
 		return res;
 	}

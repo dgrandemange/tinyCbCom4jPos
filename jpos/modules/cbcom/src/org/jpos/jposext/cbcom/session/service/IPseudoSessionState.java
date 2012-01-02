@@ -18,6 +18,13 @@ public interface IPseudoSessionState {
 	 * @param ctx
 	 */
 	public void init(PseudoSessionContext ctx);
+
+	/**
+	 * Transition : when an IPDU CN has been emitted 
+	 * 
+	 * @param ctx
+	 */
+	public void onIpduCNEmitted(PseudoSessionContext ctx);	
 	
 	/**
 	 * Transition : when receiving an IPDU CN 
@@ -25,14 +32,21 @@ public interface IPseudoSessionState {
 	 * @param ctx
 	 */
 	public void onIpduCNReceived(PseudoSessionContext ctx);
-
+	
 	/**
-	 * Transition : when an IPDU AC has been responded 
+	 * Transition : when an IPDU AC has been emitted 
 	 * 
 	 * @param ctx
 	 */
 	public void onIpduACEmitted(PseudoSessionContext ctx);
 
+	/**
+	 * Transition : when receiving an IPDU AC
+	 * 
+	 * @param ctx
+	 */
+	public void onIpduACReceived(PseudoSessionContext ctx);	
+	
 	/**
 	 * Transition : when receiving an IPDU DE 
 	 * 
@@ -41,12 +55,19 @@ public interface IPseudoSessionState {
 	public void onIpduDEReceived(PseudoSessionContext ctx);
 
 	/**
-	 * Transition : when an IPDU DE has been responded 
+	 * Transition : when an IPDU DE has been emitted 
 	 * 
 	 * @param ctx
 	 */
 	public void onIpduDEEmitted(PseudoSessionContext ctx);
 
+	/**
+	 * Transition : when there is an IPDU DE to send 
+	 * 
+	 * @param ctx
+	 */
+	public void onIpduDEToSend(PseudoSessionContext ctx);
+	
 	/**
 	 * Transition : when receiving an IPDU AB 
 	 * 
@@ -55,11 +76,12 @@ public interface IPseudoSessionState {
 	public void onIpduABReceived(PseudoSessionContext ctx);
 
 	/**
-	 * Transition : when an IPDU AB has been responded 
+	 * Transition : when an IPDU AB has been emitted 
 	 * 
 	 * @param ctx
+	 * @param abortCode
 	 */
-	public void onIpduABEmitted(PseudoSessionContext ctx);
+	public void onIpduABEmitted(PseudoSessionContext ctx, int abortCode);
 
 	/**
 	 * Transition : when receiving an invalid IPDU 

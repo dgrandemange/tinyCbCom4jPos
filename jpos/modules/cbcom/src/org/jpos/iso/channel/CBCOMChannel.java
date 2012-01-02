@@ -9,8 +9,10 @@ import java.lang.reflect.Method;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
-import java.nio.ByteBuffer;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 
 import org.jpos.core.Configuration;
@@ -24,15 +26,16 @@ import org.jpos.iso.ISOUtil;
 import org.jpos.iso.ISOFilter.VetoException;
 import org.jpos.jposext.cbcom.exception.CBCOMBadIPDUException;
 import org.jpos.jposext.cbcom.exception.CBCOMException;
+import org.jpos.jposext.cbcom.exception.CBCOMSessionClosedException;
 import org.jpos.jposext.cbcom.exception.CBCOMSessionException;
 import org.jpos.jposext.cbcom.exception.CBCOMSessionStateException;
 import org.jpos.jposext.cbcom.model.IPDU;
 import org.jpos.jposext.cbcom.model.IPDUEnum;
-import org.jpos.jposext.cbcom.model.PI;
 import org.jpos.jposext.cbcom.model.PIEnum;
 import org.jpos.jposext.cbcom.service.IIPDUExtractionService;
 import org.jpos.jposext.cbcom.service.support.IPDUFactoryImpl;
 import org.jpos.jposext.cbcom.session.model.PseudoSessionContext;
+import org.jpos.jposext.cbcom.session.model.TimerConfig;
 import org.jpos.jposext.cbcom.session.service.IChannelCallback;
 import org.jpos.jposext.cbcom.session.service.IPseudoSessionState;
 import org.jpos.jposext.cbcom.session.service.ISessionStateFactory;
@@ -48,10 +51,6 @@ import org.jpos.util.Logger;
  * 
  */
 public class CBCOMChannel extends BaseChannel {
-
-	private static final String PSEUDO_SESSION_CONTEXT__ATTR_NAME__LAST_ISO_MSG = "lastIsoMsg";
-
-	private static final int SCHED_THREAD_POOL__DEFAULT_CORE_SIZE = 100;
 
 	/**
 	 * IPDU extraction service
@@ -164,32 +163,14 @@ public class CBCOMChannel extends BaseChannel {
 		 * org.jpos.jposext.cbcom.session.server.service.IChannelCallback#send
 		 * (byte[])
 		 */
-		public void send(byte[] b) throws CBCOMSessionException {
+		public void send(byte[] b, boolean doCount)
+				throws CBCOMSessionException {
 			try {
 				// Delegate the send operation to the underlying channel
-				channel.send(b);
+				channel.send(b, doCount);
 			} catch (IOException e) {
-				e.printStackTrace();
 				throw new CBCOMSessionException(e);
 			} catch (ISOException e) {
-				e.printStackTrace();
-				throw new CBCOMSessionException(e);
-			}
-		}
-
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @seeorg.jpos.jposext.cbcom.session.server.service.IChannelCallback#
-		 * processApdu(byte[], int)
-		 */
-		public void processApdu(byte[] apdu, int lenApdu)
-				throws CBCOMSessionException {
-			// Delegate apdu processing to the underlying channel
-			try {
-				channel.processApdu(apdu, lenApdu);
-			} catch (ISOException e) {
-				e.printStackTrace();
 				throw new CBCOMSessionException(e);
 			}
 		}
@@ -207,17 +188,318 @@ public class CBCOMChannel extends BaseChannel {
 				channel.closeSocket();
 			} catch (IOException e) {
 				// Safe to ignore, it may be already closed
-				e.printStackTrace();
 			}
 		}
 
+		/**
+		 * @param tag
+		 * @param msg
+		 */
+		public void log(String tag, Object msg) {
+			LogEvent evt = new LogEvent(channel, tag);
+			evt.addMessage(msg);
+			Logger.log(evt);
+		}
+
 	};
+
+	/**
+	 * @author dgrandemange
+	 * 
+	 */
+	class IncomingApduNotifier {
+
+		private byte[] apdu;
+
+		private LogEvent evt;
+
+		private Exception exception;
+
+		private byte abortCode;
+
+		public IncomingApduNotifier(LogEvent evt) {
+			super();
+			this.evt = evt;
+		}
+
+		public byte[] getApdu() {
+			return apdu;
+		}
+
+		public LogEvent getEvt() {
+			return evt;
+		}
+
+		public void setEvt(LogEvent evt) {
+			this.evt = evt;
+		}
+
+		public void setApdu(byte[] apdu) {
+			this.apdu = apdu;
+		}
+
+		public void add(Object msg) {
+			evt.addMessage(msg);
+		}
+
+		public Exception getException() {
+			return exception;
+		}
+
+		public void setException(Exception exception) {
+			this.exception = exception;
+		}
+
+		public byte getAbortCode() {
+			return abortCode;
+		}
+
+		public void setAbortCode(byte abortCode) {
+			this.abortCode = abortCode;
+		}
+
+	}
+
+	/**
+	 * @author dgrandemange
+	 * 
+	 */
+	class IncomingIpduMgmtTask implements Callable<Object> {
+
+		/**
+		 * The CBCOM Channel
+		 */
+		private CBCOMChannel channel;
+
+		/**
+		 * Synchronization object to notify that an apdu has been successfully
+		 * extracted from an IPDU DE
+		 */
+		private IncomingApduNotifier incomingApduNotifier;
+
+		public IncomingIpduMgmtTask(CBCOMChannel channel,
+				IncomingApduNotifier incomingApduNotifier) {
+			super();
+			this.channel = channel;
+			this.incomingApduNotifier = incomingApduNotifier;
+		}
+
+		/*
+		 * (non-Javadoc)
+		 * 
+		 * @see java.util.concurrent.Callable#call()
+		 */
+		public Object call() throws Exception {
+			ctx.setChannelCallback(new ChannelCallbackImpl(this.channel));
+
+			IPDU lastIpduReceived = null;
+			boolean sessionAborted = false;
+			byte[] b = null;
+
+			try {
+				while (!sessionAborted) {
+					if (!channel.isConnected())
+						throw new ISOException("unconnected CBCOMChannel");
+
+					int len;
+
+					synchronized (channel.serverInLock) {
+
+						// Trying to read length
+						len = channel.getMessageLength();
+
+						int hLen = channel.getHeaderLength();
+
+						if (len == -1) {
+							if (hLen > 0) {
+								header = channel.readHeader(hLen);
+							}
+							b = channel.streamReceive();
+						} else if (len > 0
+								&& len <= channel.getMaxPacketLength()) {
+							if (hLen > 0) {
+								// ignore message header (TPDU)
+								// Note header length is not necessarily equal
+								// to hLen
+								// (see VAPChannel)
+								header = channel.readHeader(hLen);
+								len -= header.length;
+							}
+							b = new byte[len];
+							channel.getMessage(b, 0, len);
+							channel.getMessageTrailler();
+						} else
+							throw new ISOException("receive length " + len
+									+ " seems strange - maxPacketLength = "
+									+ channel.getMaxPacketLength());
+					}
+
+					lastIpduReceived = extractIPDU(b, len);
+
+					manageReceivedIPDU(lastIpduReceived);
+
+					IPDUEnum lastReceivedIpduType = lastIpduReceived
+							.getIpduType();
+					sessionAborted = (IPDUEnum.AB == lastReceivedIpduType)
+							|| (!isConnected());
+
+					if (IPDUEnum.AB == lastReceivedIpduType) {
+						byte abortCode;
+						try {
+							abortCode = lastIpduReceived
+									.findPiByPIEnum(PIEnum.PI01)
+									.getParamValue()[0];
+						} catch (Exception e) {
+							abortCode = 0x04;
+						}
+						if ((0x80 != abortCode) || (0x00 != abortCode)) {
+							throw new VetoException(new CBCOMException(abortCode));
+						}
+					}
+
+					if (!sessionAborted) {
+						if (IPDUEnum.DE == lastReceivedIpduType) {
+							incomingApduNotifier.setApdu(lastIpduReceived
+									.getApdu());
+							synchronized (incomingApduNotifier) {
+								incomingApduNotifier.notify();
+							}
+						}
+					}
+
+					Thread.yield();
+
+				}
+			} catch (VetoException e) {
+				incomingApduNotifier.setException(e);
+			} catch (ISOException e) {
+				if (header != null) {
+					incomingApduNotifier.add("--- header ---");
+					incomingApduNotifier.add(ISOUtil.hexdump(header));
+				}
+				if (b != null) {
+					incomingApduNotifier.add("--- data ---");
+					incomingApduNotifier.add(ISOUtil.hexdump(b));
+				}
+				incomingApduNotifier.setException(e);
+			} catch (EOFException e) {
+				incomingApduNotifier.setException(e);
+			} catch (SocketException e) {
+				incomingApduNotifier.setException(e);
+			} catch (InterruptedIOException e) {
+				incomingApduNotifier.setException(e);
+			} catch (IOException e) {
+				incomingApduNotifier.setException(e);
+			} catch (Exception e) {
+				incomingApduNotifier.setException(e);
+			}
+
+			synchronized (incomingApduNotifier) {
+				incomingApduNotifier.notify();
+			}
+
+			return null;
+
+		}
+
+		protected IPDU extractIPDU(byte[] b, int len) {
+			IIPDUExtractionService ipduReader = new IPDUExtractionServiceImpl(
+					b, len);
+
+			IPDU ipdu = null;
+
+			PseudoSessionContext sessionCtx = channel.ctx;
+
+			try {
+				ipdu = CBCOMChannel.ipduFactory.create(ipduReader);
+				if (logCBCOM) {
+					LogEvent evt = new LogEvent(channel, "receive");
+					evt.addMessage(ISOUtil.hexdump(b));
+					Logger.log(evt);
+				}
+			} catch (CBCOMBadIPDUException e) {
+				// IPDU seems invalid
+				sessionCtx.getSessionState().onInvalidIpduReceived(sessionCtx,
+						e);
+			} catch (CBCOMException e) {
+				sessionCtx.getSessionState().onInvalidIpduReceived(sessionCtx);
+			}
+
+			return ipdu;
+		}
+
+		/**
+		 * 
+		 * @param b
+		 * @param len
+		 */
+		protected void manageReceivedIPDU(IPDU ipdu) {
+
+			PseudoSessionContext sessionCtx = channel.ctx;
+
+			// Set the ipdu in pseudo session context
+			sessionCtx.setIpdu(ipdu);
+
+			try {
+				IPDUEnum ipduEnum = ipdu.getIpduType();
+				String transitionName = String.format("onIpdu%sReceived",
+						ipduEnum.name());
+				Method transitionMethod = null;
+
+				try {
+					// TODO Optimisation : recherche de la méthode dans une
+					// map statique pré-peuplée (statiquement par exemple)
+					transitionMethod = sessionCtx.getSessionState().getClass()
+							.getMethod(transitionName,
+									PseudoSessionContext.class);
+				} catch (SecurityException e) {
+					// Safe to ignore
+				} catch (NoSuchMethodException e) {
+					// Unknown method : unable to handle transition
+					// Keep the transitionMethod variable to null
+				}
+
+				if (null == transitionMethod) {
+					// No transition method found for current state
+					sessionCtx.getSessionState().onInvalidIpduReceived(
+							sessionCtx);
+				} else {
+					try {
+						transitionMethod.invoke(sessionCtx.getSessionState(),
+								sessionCtx);
+					} catch (IllegalArgumentException e) {
+						// Safe to ignore
+					} catch (IllegalAccessException e) {
+						// Safe to ignore
+					} catch (InvocationTargetException e) {
+						// Safe to ignore
+					} catch (CBCOMSessionStateException e) {
+						// Oups, state machine seems not fully implemented. Bad
+						// job
+						// here ...
+						e.printStackTrace();
+						try {
+							channel.closeSocket();
+						} catch (IOException e1) {
+						}
+					}
+				}
+			} finally {
+				// Reset the ipdu in pseudo session context
+				sessionCtx.setIpdu(null);
+			}
+		}
+	}
 
 	private static IPDUFactoryImpl ipduFactory = new IPDUFactoryImpl();
 
 	private static ISessionStateFactory stateFactoryServer;
 
 	private static ISessionStateFactory stateFactoryClient;
+
+	private static ExecutorService ipduMgmtTaskExecutor;
+
+	private static ScheduledExecutorService defferedTaskExecutor;
 
 	static {
 		stateFactoryServer = new SessionStateFactoryImpl();
@@ -237,17 +519,22 @@ public class CBCOMChannel extends BaseChannel {
 								org.jpos.jposext.cbcom.session.service.support.client.ConnectedState.class,
 								org.jpos.jposext.cbcom.session.service.support.client.LoggedOffState.class },
 						org.jpos.jposext.cbcom.session.service.support.client.InitialState.class);
+
+		// TODO Thread executor pool size should be parameterized
+		ipduMgmtTaskExecutor = Executors.newFixedThreadPool(10);
+
+		// TODO Thread executor pool size should be parameterized
+		defferedTaskExecutor = Executors.newScheduledThreadPool(10);
+
 	}
 
 	private PseudoSessionContext ctx;
 
-	private int defaultTsi;
+	private Future<Object> ipduMgmtTaskFuture;
 
-	private int defaultMaxTsi;
+	private IncomingApduNotifier incomingApduNotifier;
 
-	private int defaultMinTsi;
-
-	private ScheduledExecutorService defferedTaskExecutor;
+	private boolean logCBCOM;
 
 	public CBCOMChannel() {
 		super();
@@ -273,15 +560,7 @@ public class CBCOMChannel extends BaseChannel {
 	void init() {
 		ctx = new PseudoSessionContext();
 		ctx.setIpduFactory(ipduFactory);
-
-		// By default, we consider the channel a "client" channel.
-		ctx.setStateFactory(stateFactoryClient);
-		IPseudoSessionState initialState = stateFactoryClient.getInitialState();
-		ctx.setSessionState(initialState);
-		initialState.init(ctx);
-
-		// In case of a "server" channel, these properties may be overridden in
-		// accept(ServerSocket s) method
+		ctx.setDefferedTaskExecutor(CBCOMChannel.defferedTaskExecutor);
 	}
 
 	@Override
@@ -289,99 +568,118 @@ public class CBCOMChannel extends BaseChannel {
 			throws ConfigurationException {
 		super.setConfiguration(cfg);
 
-		// TODO Read default scheduled thread pool core size if configured, use
-		// constant SCHED_THREAD_POOL__DEFAULT_CORE_SIZE otherwise
-		this.defferedTaskExecutor = Executors
-				.newScheduledThreadPool(SCHED_THREAD_POOL__DEFAULT_CORE_SIZE);
-		// TODO See if defferedTaskExecutor be better static
+		String strLogCBCOM = cfg.get("hexdump-CBCOM", "false");
+		this.logCBCOM = Boolean.parseBoolean(strLogCBCOM);
 
-		this.defaultTsi = cfg.getInt("timer-TSI-default");		
-		this.ctx.setTsi(this.defaultTsi);
+		TimerConfig timerCfg = new TimerConfig();
 
-		this.defaultMaxTsi = cfg.getInt("timer-TSI-max");
-		this.ctx.setMaxTsi(this.defaultMaxTsi);
+		String strTgrTimer = cfg.get("TGR-timer", "30");
+		timerCfg.setTgr(Integer.parseInt(strTgrTimer));
 
-		this.defaultMinTsi = cfg.getInt("timer-TSI-min");
-		this.ctx.setMinTsi(this.defaultMaxTsi);
+		String strTsiTimer = cfg.get("TSI-timer", "780");
+		timerCfg.setInitialTsi(Integer.parseInt(strTsiTimer));
+		timerCfg.setNegotiatedTsi(timerCfg.getInitialTsi());
+
+		String strMinTsi = cfg.get("TSI-timer-min", "120");
+		timerCfg.setMinTsi(Integer.parseInt(strMinTsi));
+
+		String strMaxTsi = cfg.get("TSI-timer-max", "1800");
+		timerCfg.setMaxTsi(Integer.parseInt(strMaxTsi));
+
+		String strTnrTimer = cfg.get("TNR-timer", "50");
+		timerCfg.setInitialTnr(Integer.parseInt(strTnrTimer));
+		timerCfg.setNegotiatedTnr(timerCfg.getInitialTnr());
+
+		String strMinTnr = cfg.get("TNR-timer-min", "" + timerCfg.getTgr() + 2);
+		timerCfg.setMinTnr(Integer.parseInt(strMinTnr));
+
+		String strMaxTnr = cfg
+				.get("TNR-timer-max", "" + timerCfg.getTgr() + 32);
+		timerCfg.setMaxTnr(Integer.parseInt(strMaxTnr));
+
+		String strTmaTimer = cfg.get("TMA-timer", "720");
+		timerCfg.setInitialTma(Integer.parseInt(strTmaTimer));
+		timerCfg.setNegotiatedTma(timerCfg.getInitialTma());
+
+		String strMinTma = cfg.get("TMA-timer-min", "120");
+		timerCfg.setMinTma(Integer.parseInt(strMinTma));
+
+		String strMaxTma = cfg.get("TMA-timer-max", "1800");
+		timerCfg.setMaxTma(Integer.parseInt(strMaxTma));
+
+		String strPreConnectionTimer = cfg.get("pre-connection-timer", "15");
+		timerCfg.setPreConnectionTimer(Integer.parseInt(strPreConnectionTimer));
+
+		String strInterSessionTimer = cfg.get("inter-session-timer", "30");
+		timerCfg.setInterSessionTimer(Integer.parseInt(strInterSessionTimer));
+
+		String strPostConnectionTimer = cfg.get("post-connection-timer", "30");
+		timerCfg.setPostCnxTimer(Integer.parseInt(strPostConnectionTimer));
+
+		this.ctx.setTimerConfig(timerCfg);
+
+		String strCBCOMProtocolVersion = cfg
+				.get("cbcom-protocol-version", "11");
+		byte[] cbcomProtocolVersion = ISOUtil.str2bcd(strCBCOMProtocolVersion,
+				false);
+		this.ctx.setCbcomProtocolVersion(cbcomProtocolVersion[0]);
+
+		String strCB2AProtocolVersion = cfg.get("cb2a-protocol-version", "123");
+		byte[] cb2aProtocolVersion = ISOUtil.str2bcd(strCB2AProtocolVersion,
+				false);
+		this.ctx.setCb2aProtocolVersion(cb2aProtocolVersion);
 	}
 
 	@Override
 	public ISOMsg receive() throws IOException, ISOException {
-		byte[] b = null;
-		byte[] header = null;
-
 		LogEvent evt = new LogEvent(this, "receive");
-
 		ISOMsg m = null;
-		IPDU receivedIpdu = null;
+		byte[] apdu = null;
+
+		if ((null == ipduMgmtTaskFuture) || (ipduMgmtTaskFuture.isDone())
+				|| (ipduMgmtTaskFuture.isCancelled())) {
+			incomingApduNotifier = new IncomingApduNotifier(evt);
+
+			ipduMgmtTaskFuture = ipduMgmtTaskExecutor
+					.submit(new IncomingIpduMgmtTask(this, incomingApduNotifier));
+		}
 
 		try {
-			if (!isConnected())
-				throw new ISOException("unconnected CBCOMChannel");
-
-			int len;
-
-			synchronized (serverInLock) {
-
-				// Trying to read length
-				len = getMessageLength();
-
-				int hLen = getHeaderLength();
-
-				if (len == -1) {
-					if (hLen > 0) {
-						header = readHeader(hLen);
-					}
-					b = streamReceive();
-				} else if (len > 0 && len <= getMaxPacketLength()) {
-					if (hLen > 0) {
-						// ignore message header (TPDU)
-						// Note header length is not necessarily equal to hLen
-						// (see VAPChannel)
-						header = readHeader(hLen);
-						len -= header.length;
-					}
-					b = new byte[len];
-					getMessage(b, 0, len);
-					getMessageTrailler();
-				} else
-					throw new ISOException("receive length " + len
-							+ " seems strange - maxPacketLength = "
-							+ getMaxPacketLength());
+			// TODO Set a time-out to the wait() ?
+			synchronized (incomingApduNotifier) {
+				incomingApduNotifier.wait();
+				apdu = incomingApduNotifier.getApdu();
+				incomingApduNotifier.setApdu(null);
 			}
 
-			receivedIpdu = manageCBCOM(b, len);
-			// At this stage, the ISOMsg may be (or not) populated
-			// by CBCOM management, depending on whether the IPDU
-			// was a DE or not
+			Exception e = incomingApduNotifier.getException();
+			if (e != null) {
+				throw e;
+			}
 
-			// So we get ISO message from the pseudo session context ...
-			m = (ISOMsg) ctx
-					.get(PSEUDO_SESSION_CONTEXT__ATTR_NAME__LAST_ISO_MSG);
-			// ... then remove it from context
-			ctx.remove(PSEUDO_SESSION_CONTEXT__ATTR_NAME__LAST_ISO_MSG);
+			if (apdu != null) {
 
-			// At this stage, m is either populated (IPDU DE) or null (others
-			// IPDUs)
+				m = createMsg();
+				m.setSource(this);
+				m.setPackager(getDynamicPackager(header, apdu));
+				m.setHeader(getDynamicHeader(header));
+				if (apdu.length > 0 && !shouldIgnore(header))
+					unpack(m, apdu);
+				m.setDirection(ISOMsg.INCOMING);
+				m = applyIncomingFilters(m, header, apdu, evt);
+				m.setDirection(ISOMsg.INCOMING);
 
-			// If m is null, there is no need to further process it
-			if (null != m) {
+				evt.addMessage(m);
 				cnt[RX]++;
 				setChanged();
-				evt.addMessage(m);
 				notifyObservers(m);
 			}
-
+		} catch (InterruptedException e) {
+			evt.addMessage(e);
+			// TODO Think about this case
+			e.printStackTrace();
 		} catch (ISOException e) {
 			evt.addMessage(e);
-			if (header != null) {
-				evt.addMessage("--- header ---");
-				evt.addMessage(ISOUtil.hexdump(header));
-			}
-			if (b != null) {
-				evt.addMessage("--- data ---");
-				evt.addMessage(ISOUtil.hexdump(b));
-			}
 			throw e;
 		} catch (EOFException e) {
 			closeSocket();
@@ -403,159 +701,18 @@ public class CBCOMChannel extends BaseChannel {
 				evt.addMessage(e);
 			throw e;
 		} catch (Exception e) {
-			evt.addMessage(m);
 			evt.addMessage(e);
 			throw new ISOException("unexpected exception", e);
 		} finally {
 			Logger.log(evt);
 		}
 
-		// If message (m) is null (which means : received IPDU didn't wraps an
-		// APDU), we should not let the caller further process it.
-		// In a case of an ISOServer caller, unless we throw a VetoException,
-		// the null message is going to be transferred to the ISORequestListener
-		// associated to this ISOServer. In this case, the ISORequestListener
-		// should ensure message is not null before trying to process it.
-
-		// TODO See if these 2 behaviors can be configured in the channel XML
-		// configuration via a dedicated
-		// "send VetoException when received IPDU has no APDU" parameter
-
-		if (null == m) {
-			if (null != receivedIpdu) {
-				throw new VetoException(String.format(
-						"IPDU-%s CBCOM : no apdu to process", receivedIpdu
-								.getIpduType().name()));
-			} else {
-				throw new VetoException("IPDU CBCOM : no apdu to process");
-			}
+		if (null != m) {
+			return m;
+		} else {
+			throw new VetoException();
 		}
 
-		return m;
-	}
-
-	/**
-	 * CBCOM management
-	 * 
-	 * @param b
-	 * @param len
-	 */
-	protected IPDU manageCBCOM(byte[] b, int len) {
-		IChannelCallback channelCallback = new ChannelCallbackImpl(this);
-
-		ctx.setChannelCallback(channelCallback);
-
-		IIPDUExtractionService ipduReader = new IPDUExtractionServiceImpl(b,
-				len);
-
-		IPDU ipdu = null;
-
-		try {
-			ipdu = ipduFactory.create(ipduReader);
-
-			// Set the ipdu in pseudo session context
-			ctx.setIpdu(ipdu);
-
-			IPDUEnum ipduEnum = ipdu.getIpduType();
-			String transitionName = String.format("onIpdu%sReceived", ipduEnum
-					.name());
-			Method transitionMethod = null;
-
-			try {
-				// TODO Optimisation : recherche de la méthode dans une
-				// map statique pré-peuplée (statiquement par exemple)
-				transitionMethod = ctx.getSessionState().getClass().getMethod(
-						transitionName, PseudoSessionContext.class);
-			} catch (SecurityException e) {
-				// Safe to ignore
-				e.printStackTrace();
-			} catch (NoSuchMethodException e) {
-				// Unknown method : unable to handle transition
-				// Keep the transitionMethod variable to null
-			}
-
-			if (null == transitionMethod) {
-				// No transition method found for current state
-				ctx.getSessionState().onInvalidIpduReceived(ctx);
-			} else {
-				try {
-					transitionMethod.invoke(ctx.getSessionState(), ctx);
-				} catch (IllegalArgumentException e) {
-					// Safe to ignore
-					e.printStackTrace();
-				} catch (IllegalAccessException e) {
-					// Safe to ignore
-					e.printStackTrace();
-				} catch (InvocationTargetException e) {
-					// Safe to ignore
-					e.printStackTrace();
-				} catch (CBCOMSessionStateException e) {
-					// Oups, state machine seems not fully implemented. Bad job here ...
-					e.printStackTrace();
-					try {
-						this.closeSocket();
-					} catch (IOException e1) {
-					}
-				}
-			}
-
-		} catch (CBCOMBadIPDUException e) {
-			// IPDU seems invalid
-			ctx.getSessionState().onInvalidIpduReceived(ctx, e);
-		} catch (CBCOMException e) {
-			ctx.getSessionState().onInvalidIpduReceived(ctx);
-			e.printStackTrace();
-		} finally {
-			// Reset ipdu in pseudo session context
-			ctx.setIpdu(null);
-		}
-
-		return ipdu;
-
-	}
-
-	/**
-	 * The apdu processing has one task : try to get an ISOMsg from the apdu and
-	 * put in the CBCOM pseudo session context, so that it can be further
-	 * processed by jpos
-	 * 
-	 * @param apdu
-	 * @param lenApdu
-	 * @return
-	 * @throws ISOException
-	 */
-	protected void processApdu(byte[] apdu, int lenApdu) throws ISOException {
-		LogEvent evt = new LogEvent(this, "processApdu");
-
-		try {
-			ISOMsg m = createMsg();
-			m.setSource(this);
-
-			m.setPackager(getDynamicPackager(header, apdu));
-			m.setHeader(getDynamicHeader(header));
-			if (apdu.length > 0 && !shouldIgnore(header))
-				unpack(m, apdu);
-			m.setDirection(ISOMsg.INCOMING);
-			m = applyIncomingFilters(m, header, apdu, evt);
-			m.setDirection(ISOMsg.INCOMING);
-
-			// Add iso msg into CBCOM session context
-			ctx.put(PSEUDO_SESSION_CONTEXT__ATTR_NAME__LAST_ISO_MSG, m);
-
-			evt.addMessage(m);
-			notifyObservers(m);
-		} catch (ISOException e) {
-			evt.addMessage(e);
-			if (header != null) {
-				evt.addMessage("--- header ---");
-				evt.addMessage(ISOUtil.hexdump(header));
-			}
-			if (apdu != null) {
-				evt.addMessage("--- data ---");
-				evt.addMessage(ISOUtil.hexdump(apdu));
-			}
-			throw e;
-		}
 	}
 
 	/**
@@ -570,7 +727,6 @@ public class CBCOMChannel extends BaseChannel {
 				socket.setSoLinger(true, 0);
 			} catch (SocketException e) {
 				// safe to ignore - can be closed already
-				// e.printStackTrace();
 			}
 			socket.close();
 			socket = null;
@@ -590,17 +746,73 @@ public class CBCOMChannel extends BaseChannel {
 	}
 
 	@Override
-	public void accept(ServerSocket s) throws IOException {
-		ctx.setStateFactory(stateFactoryServer);
-		IPseudoSessionState initialState = stateFactoryServer.getInitialState();
+	public void connect() throws IOException {
+		super.connect();
+
+		if (serverSocket != null) {
+			ctx.setStateFactory(stateFactoryServer);
+		} else {
+			ctx.setStateFactory(stateFactoryClient);
+		}
+
+		IPseudoSessionState initialState = ctx.getStateFactory()
+				.getInitialState();
 		ctx.setSessionState(initialState);
 		initialState.init(ctx);
+	}
 
+	@Override
+	public void accept(ServerSocket s) throws IOException {
 		super.accept(s);
+		ctx.setStateFactory(stateFactoryServer);
+		IPseudoSessionState initialState = ctx.getStateFactory()
+				.getInitialState();
+		ctx.setSessionState(initialState);
+		initialState.init(ctx);
 	}
 
 	/**
-	 * sends an ISOMsg over the TCP/IP session
+	 * sends a byte[] over the TCP/IP session
+	 * 
+	 * @param b
+	 *            Buffer to send
+	 * @param doCount
+	 *            Indicates if the transmit counter should be incremented or not
+	 * @throws IOException
+	 * @throws ISOException
+	 */
+	public void send(byte[] b, boolean doCount) throws IOException,
+			ISOException {
+		LogEvent evt = new LogEvent(this, "send");
+
+		try {
+			if (!isConnected())
+				throw new ISOException("unconnected ISOChannel");
+			synchronized (serverOutLock) {
+				serverOut.write(b);
+				serverOut.flush();
+			}
+
+			if (doCount) {
+				cnt[TX]++;
+			}
+
+			if (logCBCOM) {
+				evt.addMessage(ISOUtil.hexdump(b));
+			}
+
+			setChanged();
+		} catch (Exception e) {
+			evt.addMessage(e);
+			throw new ISOException("unexpected exception", e);
+		} finally {
+			if (logCBCOM) {
+				Logger.log(evt);
+			}
+		}
+	}
+
+	/**
 	 * 
 	 * @param m
 	 *            the Message to be sent
@@ -611,6 +823,8 @@ public class CBCOMChannel extends BaseChannel {
 	 */
 	@Override
 	public void send(ISOMsg m) throws IOException, ISOException {
+		ctx.setChannelCallback(new ChannelCallbackImpl(this));
+
 		LogEvent evt = new LogEvent(this, "send");
 		try {
 			if (!isConnected())
@@ -622,34 +836,25 @@ public class CBCOMChannel extends BaseChannel {
 			m.setPackager(getDynamicPackager(m));
 			byte[] bApdu = m.pack();
 
-			// Prepare PI01
-			PI pi01 = new PI(PIEnum.PI01, new byte[] {0x00});
-			
-			// Prepare PI07
-			byte[] bLen = ByteBuffer.allocate(4).putInt(bApdu.length).array();
-			PI pi07 = new PI(PIEnum.PI07, bLen);
-			
-			// Populate IPDU-DE with PI01, PI07, and APDU
-			IPDU ipduDE = new IPDU(IPDUEnum.DE, new PI[] { pi01, pi07 }, bApdu, bApdu.length);
-			byte[] bIpduDE = ipduDE.toBytes();
-
-			synchronized (serverOutLock) {
-				serverOut.write(bIpduDE);
-				serverOut.flush();
-			}
-			cnt[TX]++;
+			// Now, we just have to put the apdu in the context
+			// and throw a transition on the current state
+			ctx.setApdu(bApdu);
+			ctx.getSessionState().onIpduDEToSend(ctx);
 			setChanged();
 			notifyObservers(m);
-			ctx.getSessionState().onIpduDEEmitted(ctx);
+		} catch (CBCOMSessionClosedException e) {
+			// Too late too send the message ...
+			VetoException e2 = new VetoException(
+					"Unable to send IPDU-DE : pseudo session is closed");
+			evt.addMessage(e2.getMessage());
+			throw e2;
+			// TODO Is there any further processing we can do with the ISOMsg we
+			// can't send ?
 		} catch (VetoException e) {
-			// if a filter vets the message it was not added to the event
-			evt.addMessage(m);
-			evt.addMessage(e);
+			// if a filter vetoes the message it was not added to the event
+			evt.addMessage(e.getMessage());
 			throw e;
 		} catch (ISOException e) {
-			evt.addMessage(e);
-			throw e;
-		} catch (IOException e) {
 			evt.addMessage(e);
 			throw e;
 		} catch (Exception e) {
@@ -665,20 +870,13 @@ public class CBCOMChannel extends BaseChannel {
 	public Object clone() {
 		CBCOMChannel clone = (CBCOMChannel) super.clone();
 
-		clone.ctx = new PseudoSessionContext();
-		clone.ctx.setIpduFactory(CBCOMChannel.ipduFactory);
+		clone.logCBCOM = this.logCBCOM;
 
-		clone.ctx.setStateFactory(this.ctx.getStateFactory());
-		IPseudoSessionState initialState = this.ctx.getStateFactory()
-				.getInitialState();
-		clone.ctx.setSessionState(initialState);
-		initialState.init(clone.ctx);
-
-		clone.ctx.setIpdu(null);
-		clone.ctx.setTsi(this.defaultTsi);
-		clone.ctx.setMinTsi(this.defaultMinTsi);
-		clone.ctx.setMaxTsi(this.defaultMaxTsi);
-		clone.ctx.setDefferedTaskExecutor(this.defferedTaskExecutor);
+		try {
+			clone.ctx = (PseudoSessionContext) ctx.clone();
+		} catch (CloneNotSupportedException e) {
+			throw new InternalError();
+		}
 
 		return clone;
 	}

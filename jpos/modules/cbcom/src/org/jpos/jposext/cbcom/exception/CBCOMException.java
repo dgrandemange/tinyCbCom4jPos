@@ -13,18 +13,6 @@ public class CBCOMException extends Exception {
 		super();
 	}
 
-	public CBCOMException(String arg0, Throwable arg1) {
-		super(arg0, arg1);
-	}
-
-	public CBCOMException(String arg0) {
-		super(arg0);
-	}
-
-	public CBCOMException(Throwable arg0) {
-		super(arg0);
-	}
-
 	public CBCOMException(byte pv01) {		
 		super();
 		this.pv01 = pv01;
@@ -43,6 +31,10 @@ public class CBCOMException extends Exception {
 	public CBCOMException(Throwable arg0, byte pv01) {
 		super(arg0);
 		this.pv01 = pv01;
+	}
+
+	public byte getPI01Value() {
+		return pv01;
 	}
 		
 }

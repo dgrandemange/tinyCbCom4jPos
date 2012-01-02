@@ -1,7 +1,7 @@
 package org.jpos.jposext.cbcom.exception;
 
 /**
- * Exczeption raised typically when a transition is unexpectedly made against current
+ * Exception raised typically when a transition is unexpectedly made against current
  * pseudo session state<BR>
  * 
  * @author dgrandemange

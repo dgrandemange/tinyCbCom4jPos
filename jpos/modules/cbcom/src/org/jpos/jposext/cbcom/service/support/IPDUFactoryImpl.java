@@ -126,8 +126,7 @@ public class IPDUFactoryImpl implements IIPDUFactory {
 				bos.write(readApdu);
 				bos.flush();
 			} catch (IOException e) {
-				// May not occur in our case
-				e.printStackTrace();
+				// Safe to ignore				
 			}			
 			return apduLen;
 		} else {

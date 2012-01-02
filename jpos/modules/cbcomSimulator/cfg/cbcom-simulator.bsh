@@ -29,18 +29,17 @@ if ("0100".equals(MTI)) {
 	String codeRep = convertAmountToCodeRep(message.getString(4));
 	
 	if ("00".equals(codeRep)) {
-		message.set(38, (new java.text.SimpleDateFormat("mmHHss")).format(new Date()));
+		message.set(38, (new java.text.SimpleDateFormat("HHmmss")).format(new Date()));
 	}
 	
 	message.set(39, codeRep);
 	
-	// TODO Complete according to your needs ...
-	
-	source.send(message);
-} else {
-	message.setResponseMTI();
-	
-	// TODO Complete according to your needs ...
-	
+/*
+	// Sleep for a lapse of time (for test purpose)		
+	try {
+		Thread.sleep(40000);
+	} catch (Exception e) {
+	}
+*/			
 	source.send(message);
 }

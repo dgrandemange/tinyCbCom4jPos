@@ -1,63 +1,81 @@
 package org.jpos.jposext.cbcom.session.service.support.client;
 
+import org.jpos.jposext.cbcom.exception.CBCOMSessionException;
 import org.jpos.jposext.cbcom.session.model.PseudoSessionContext;
 import org.jpos.jposext.cbcom.session.service.IPseudoSessionState;
 import org.jpos.jposext.cbcom.session.service.support.PseudoSessionStateAbstractImpl;
 
 /**
- * Connected pseudo session state "client" implementation<BR>
+ * Logged off pseudo session state "client" implementation<BR>
  * 
  * @author dgrandemange
- *
+ * 
  */
-public class LoggedOffState extends PseudoSessionStateAbstractImpl implements IPseudoSessionState{
+public class LoggedOffState extends PseudoSessionStateAbstractImpl implements
+		IPseudoSessionState {
 
 	@Override
-	public void onInvalidIpduReceived(PseudoSessionContext ctx) {
-		// TODO Auto-generated method stub
-		super.onInvalidIpduReceived(ctx);
+	public void init(PseudoSessionContext ctx) {
 	}
 
 	@Override
-	public void onIpduABEmitted(PseudoSessionContext ctx) {
-		// TODO Auto-generated method stub
-		super.onIpduABEmitted(ctx);
+	public void onIpduABEmitted(PseudoSessionContext ctx, int abortCode) {
+		// N/A
 	}
 
 	@Override
 	public void onIpduABReceived(PseudoSessionContext ctx) {
-		// TODO Auto-generated method stub
-		super.onIpduABReceived(ctx);
 	}
 
 	@Override
 	public void onIpduACEmitted(PseudoSessionContext ctx) {
-		// TODO Auto-generated method stub
-		super.onIpduACEmitted(ctx);
+		// N/A
 	}
 
 	@Override
 	public void onIpduCNReceived(PseudoSessionContext ctx) {
-		// TODO Auto-generated method stub
-		super.onIpduCNReceived(ctx);
+		try {
+			ctx.getChannelCallback().close();
+		} catch (CBCOMSessionException e) {
+			// Safe to ignore
+			e.printStackTrace();
+		}
+	}
+
+	@Override
+	public void onIpduACReceived(PseudoSessionContext ctx) {
+		try {
+			ctx.getChannelCallback().close();
+		} catch (CBCOMSessionException e) {
+			// Safe to ignore
+			e.printStackTrace();
+		}
+	}
+
+	@Override
+	public void onIpduCNEmitted(PseudoSessionContext ctx) {
+		// N/A
 	}
 
 	@Override
 	public void onIpduDEEmitted(PseudoSessionContext ctx) {
-		// TODO Auto-generated method stub
-		super.onIpduDEEmitted(ctx);
+		// N/A
 	}
 
 	@Override
 	public void onIpduDEReceived(PseudoSessionContext ctx) {
-		// TODO Auto-generated method stub
-		super.onIpduDEReceived(ctx);
+		try {
+			ctx.getChannelCallback().close();
+		} catch (CBCOMSessionException e) {
+			// Safe to ignore
+			e.printStackTrace();
+		}
 	}
 
 	@Override
-	public void init(PseudoSessionContext ctx) {
-		// TODO Auto-generated method stub
-		
+	public void onIpduDEToSend(PseudoSessionContext ctx) {
+		changeState(ctx, InitialState.class);
+		ctx.getSessionState().onIpduDEToSend(ctx);
 	}
 
 }
