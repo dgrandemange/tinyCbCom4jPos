@@ -1,0 +1,28 @@
+<?xml version='1.0' encoding="iso-8859-1" ?>
+
+<qbean class="org.jpos.q2.ui.UI" name="UI" logger="Q2">
+ <ui width="300" height="150" 
+    full-screen="no" undecorated="no" close="true">
+  <caption>CBCOM client Simulator</caption>
+
+  <components>
+   <border-layout>
+    <center>
+     <grid rows="1" columns="1">
+      <cell>
+       <iso-meter refresh="250" idref="channel.clientsimulator-adaptor">Simulator</iso-meter>
+      </cell>
+     </grid>
+    </center>
+    <!--
+    <south>
+     <log-listener scrollable="true" 
+       logger="Q2" font="fixed-normal-12" 
+       max-events="1000" max-lines="500" />
+    </south>
+    -->
+   </border-layout>
+  </components>
+ </ui>
+</qbean>
+

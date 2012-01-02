@@ -1,0 +1,130 @@
+<server class="org.jpos.q2.iso.QServer" logger="Q2" name="cbcomSimulatorServer">
+
+	<attr name="port" type="java.lang.Integer">11019</attr>
+	
+	<attr name="minSessions" type="java.lang.Integer">100</attr>
+	<attr name="maxSessions" type="java.lang.Integer">2000</attr>
+	
+	<channel class="org.jpos.iso.channel.CBCOMChannel" logger="Q2"
+		packager="org.jpos.iso.packager.GenericPackager">
+		<property name="packager-config" value="cfg/cb2a.xml" />
+		
+		<!-- Protocols versions -->
+		<property name="cbcom-protocol-version" value="13" />
+		<property name="cb2a-protocol-version" value="123" />
+		
+		<!-- ======================================================================== -->
+		<!-- BEGIN Timers config (profile SERVER)                                     -->
+		<!-- ======================================================================== -->
+
+			<!-- NB : timers time unit=seconds -->
+
+			<!-- ++++++++++++++++++++++++ -->
+			<!-- BEGIN Application timers -->				
+			<!-- ++++++++++++++++++++++++ -->
+				
+				<!-- Server response guarantee timer (CB2A specs preconize 30s) -->
+				<property name="TGR-timer" value="10" />
+								
+				<!-- ++++++++++++++++++++++++ -->
+				<!-- BEGIN TSI config section -->
+				<!-- ++++++++++++++++++++++++ -->
+				
+					<!-- Default inactivity veil timer (CB2A specs preconize 780s / 13 mn ) -->
+					<property name="TSI-timer" value="10" />
+					
+					<!-- Min inactivity veil timer (CB2A specs preconize 120s / 2mn ) -->
+					<property name="TSI-timer-min" value="1" />
+					
+					<!-- Max inactivity veil timer (CB2A specs preconize 1800s / 30mn ) -->
+					<property name="TSI-timer-max" value="30" />
+				
+				<!-- ++++++++++++++++++++++++ -->
+				<!-- END   TSI config section -->
+				<!-- ++++++++++++++++++++++++ -->
+		
+				<!-- ++++++++++++++++++++++++ -->
+				<!-- BEGIN TNR config section -->
+				<!-- ++++++++++++++++++++++++ -->
+				
+					<!-- 
+						TNR negotiation interval should be valued according to the following rule : 
+						TNR > (TGR + 2 * (max network transit time))
+					-->
+				
+					<!-- Min non response timer -->
+					<property name="TNR-timer-min" value="12" />
+					
+					<!-- Max non response timer -->
+					<property name="TNR-timer-max" value="30" />
+					
+				<!-- ++++++++++++++++++++++++ -->
+				<!-- END   TNR config section -->
+				<!-- ++++++++++++++++++++++++ -->
+
+				<!-- ++++++++++++++++++++++++ -->
+				<!-- BEGIN TMA config section -->
+				<!-- ++++++++++++++++++++++++ -->
+				
+					<!--
+						!!! NOT YET IMPLEMENTED !!! 
+					-->
+				
+					<!-- Min activity maintain timer (CB2A specs preconize 120s / 2mn ) -->
+					<property name="TMA-timer-min" value="120" />
+					
+					<!-- Max activity maintain timer (CB2A specs preconize 1800s / 30mn ) -->
+					<property name="TMA-timer-max" value="1800" />
+					
+				<!-- ++++++++++++++++++++++++ -->
+				<!-- END   TMA config section -->
+				<!-- ++++++++++++++++++++++++ -->
+				
+			<!-- ++++++++++++++++++++++++ -->
+			<!-- END   Application timers -->
+			<!-- ++++++++++++++++++++++++ -->
+
+
+			<!-- +++++++++++++++++++++++++++ -->
+			<!-- BEGIN Pseudo-session timers -->				
+			<!-- +++++++++++++++++++++++++++ -->
+		
+				<!-- 
+					Server pre-connection timer
+					Launched  : after server has accepted a client connection
+					Stopped : when server has received an IPDU CN
+					On expiration do : close network communication
+					
+					CBCOM specs preconization  : 15 seconds
+				-->
+				<property name="pre-connection-timer" value="15" />		
+				
+				
+				<!-- 
+					Server inter-session timer
+					Launched  : after server has sent an IPDU AB
+					Stopped : when server has received an IPDU CN
+					On expiration do : close network communication
+					
+					CBCOM specs preconization  : 30 seconds
+				-->
+				<property name="inter-session-timer" value="30" />
+
+			<!-- +++++++++++++++++++++++++++ -->
+			<!-- BEGIN Pseudo-session timers -->				
+			<!-- +++++++++++++++++++++++++++ -->
+		
+		<!-- ======================================================================== -->
+		<!-- END   Timers config (time unit=seconds)                                  -->
+		<!-- ======================================================================== -->
+		
+		<!-- Trace CBCOM messages -->
+		<property name="hexdump-CBCOM" value="true" />
+		
+	</channel>
+
+	<request-listener class="org.jpos.bsh.BSHRequestListener" logger="Q2">
+		<property name="source" value="cfg/cbcom-simulator.bsh" />
+	</request-listener>
+	
+</server>

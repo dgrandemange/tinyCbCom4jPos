@@ -1,0 +1,98 @@
+<?xml version="1.0" ?>
+
+<channel-adaptor name='clientsimulator-adaptor' class="org.jpos.q2.iso.ChannelAdaptor"
+	logger="Q2">
+
+	<channel class="org.jpos.iso.channel.CBCOMChannel" logger="Q2"
+		packager="org.jpos.iso.packager.GenericPackager">
+		<property name="packager-config" value="cfg/cb2a.xml" />
+		<property name="host" value="127.0.0.1" />
+		<property name="port" value="11019" />
+
+		<!-- 
+			Protocols versions
+			THese info will be used to compose the IPDU CN (PI05)  
+		-->
+		<property name="cbcom-protocol-version" value="11" />
+		<property name="cb2a-protocol-version" value="123" />
+
+		<!-- ======================================================================== -->
+		<!-- BEGIN Timers config (profile CLIENT)                                     -->
+		<!-- ======================================================================== -->
+
+			<!-- NB : timers time unit=seconds -->
+
+			<!-- ++++++++++++++++++++++++ -->
+			<!-- BEGIN Application timers -->				
+			<!-- ++++++++++++++++++++++++ -->
+	
+				<!--
+					Inactivity veil timer (TSI) to negotiate with server on connection
+					request	("0" value stands for "no TSI negotiation")
+				-->
+				<property name="TSI-timer" value="5" />
+				
+				<!--
+					Non response timer (TNR) (CB2A specs preconize 50s)
+					
+					It must be valued according to the following rule :
+					
+					TNR > TGR + 2 * (maximum transit time)
+					
+					Nb : TGR = server response guarantee timer
+				-->
+				<property name="TNR-timer" value="15" />
+	
+				<!--
+					!!! NOT YET IMPLEMENTED !!!
+				
+					 Maintain activity timer (TMA) (CB2A specs preconize 12mn / 720s)
+				-->
+				<property name="TMA-timer" value="720" />
+				
+			<!-- ++++++++++++++++++++++++ -->
+			<!-- END   Application timers -->				
+			<!-- ++++++++++++++++++++++++ -->
+
+			<!-- +++++++++++++++++++++++++++ -->
+			<!-- BEGIN Pseudo session timers -->				
+			<!-- +++++++++++++++++++++++++++ -->
+				
+				<!--
+					Post connection timer 
+					
+					Launched : after an IPDU CN has been successfully sent over the channel 
+					Stopped : when an IPDU AC has been received
+					On expiration : close network communication
+				-->
+				<property name="post-connection-timer" value="30" />
+				
+			<!-- +++++++++++++++++++++++++++ -->
+			<!-- END   Pseudo session timers -->				
+			<!-- +++++++++++++++++++++++++++ -->
+
+		<!-- ======================================================================== -->
+		<!-- END   Timers config (time unit=seconds)                                  -->
+		<!-- ======================================================================== -->
+
+		<!-- Trace CBCOM messages -->
+		<property name="hexdump-CBCOM" value="true" />
+
+	</channel>
+
+	<in>clientsimulator-send</in>
+	<out>clientsimulator-receive</out>
+	<reconnect-delay>15000</reconnect-delay>
+	
+	<!-- 
+		CBCOMChannel behavior is to throw a VetoException when receiving from server an IPDU that does not wrap an APDU (typical case is when receiving an IPDU ABort).
+		This VetoException prevent the CBCOMChannel caller (that is the ChannelAdaptor here) to further process null valued ISOMsg.
+		Still, if the ChannelAdaptor is not configured to ignore ISOException, it will cut the connection ...
+		
+		Well, that's sad, because may be the CBCOMChannel has things to do on this connection.
+		If you want to let the CBCOMChannel further proceed with the IPDU AB received from server, you have to make your ChannelAdaptor ignore this VetoException.
+		To do that, configure the 'ignore-iso-exceptions' element to "yes.
+	-->
+	<ignore-iso-exceptions>yes</ignore-iso-exceptions>
+	
+</channel-adaptor>

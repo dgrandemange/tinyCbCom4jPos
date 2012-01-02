@@ -1,0 +1,9 @@
+<isomsg>
+  <field id="0" value="0100"/>
+  <field id="2" value="4973019600600485"/>
+  <field id="3" value="000000"/>
+  <field id="4" value="000000003000"/>
+  <field id="11" value="! get_STAN()"/>
+  <field id="12" value="! ISODate.getTime(new Date())"/>
+  <field id="13" value="! ISODate.getDate(new Date())"/>
+</isomsg>

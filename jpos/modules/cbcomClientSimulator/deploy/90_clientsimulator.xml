@@ -1,0 +1,55 @@
+<qbean name="clientSimulator" logger="Q2" realm="client-simulator"
+	class="org.jpos.simulator.cbcom.TestRunner">
+
+	<property name="channel" value="clientsimulator-adaptor" />
+	
+	<!-- The following timeout should be slightly > CBCCOM channel non response timer (TNR) -->	
+	<property name="timeout" value="17000" />
+
+	<init>
+		import java.util.Date;
+		import org.jpos.iso.ISODate;
+		int panCounter = 0;
+		int stanCounter = 0;
+		int amountCounter = 0;
+		String terminal = "29110001";
+		String previousTrace = "000000";
+
+		String get_date() {
+			return ISODate.getDateTime(new Date());
+		}
+
+		String get_date (String format) {
+			return ISODate.formatDate (new Date(), format);
+		}
+
+		String get_amount() {
+			return (((amountCounter++) % 2) == 0)?"000000009999":"000000010000";
+		}
+
+		String get_PAN() {
+			return String.format("%s%08d",new Object[] {"54301234", (sessionNumber*1000) + (panCounter++)});
+		}
+
+		String get_STAN() {
+			return String.format("%06d",new Object[] {(sessionNumber*1000) + (stanCounter++)});
+		} 
+  </init>
+
+	<test-suite>
+
+		<path>cfg/</path>
+
+		<test file="authorization" count="0" continue="yes" name="Simple test">
+			<init>
+				print ("Init Script");
+			</init>
+			<post>
+				print ("Post Script");
+    		</post>
+		</test>
+
+	</test-suite>
+
+</qbean>
+
