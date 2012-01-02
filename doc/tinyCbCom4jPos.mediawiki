@@ -46,24 +46,22 @@ Comparing to jPos existing channels, nothing changes in the way you use the CBCO
 You first instantiate the channel, connect to the server, send your message, wait for response, process it, and finally disconnect.
 The only thing to care about is to properly configure your instantiated channel with all the required CBCOM properties. As previously said, these properties vary upon the role your channel will endorse (client/server). You may take a further look at the sample modules for more details. 
 
-<pre>
-		channel = new CBCOMChannel(CBCOM_SERVER_HOSTNAME, CBCOM_SERVER_PORT,	packager);
-
-		cfg = new SimpleConfiguration();
-		cfg.put("cbcom-protocol-version", "12");
-		cfg.put("cb2a-protocol-version", "123");
-		cfg.put("post-connection-timer", "30");				
-		cfg.put("TSI-timer", "5");
-		cfg.put("TNR-timer", "15");
-		// cfg.put("TMA-timer", "720");		
-		cfg.put("hexdump-CBCOM", "true");		
-
-		channel.connect();
-		channel.send(msg);
-		ISOMsg resp = channel.receive();
-		// Process response
-		channel.disconnect();
-</pre>  
+<code>channel = new CBCOMChannel(CBCOM_SERVER_HOSTNAME, CBCOM_SERVER_PORT,	packager);</code><br>
+<code></code><br>
+<code>cfg = new SimpleConfiguration();</code><br>
+<code>cfg.put("cbcom-protocol-version", "12");</code><br>
+<code>cfg.put("cb2a-protocol-version", "123");</code><br>
+<code>cfg.put("post-connection-timer", "30");</code><br>
+<code>cfg.put("TSI-timer", "5");</code><br>
+<code>cfg.put("TNR-timer", "15");</code><br>
+<code>// cfg.put("TMA-timer", "720");</code><br>
+<code>cfg.put("hexdump-CBCOM", "true");</code><br>
+<code></code><br>
+<code>channel.connect();</code><br>
+<code>channel.send(msg);</code><br>
+<code>ISOMsg resp = channel.receive();</code><br>
+<code>// Process response</code><br>
+<code>channel.disconnect();</code><br>
 
 NB : full source code is available under ''src/testIntegration/org/jpos/jposext/cbcom/ClientCBCOMChannelTest.java''.
 
@@ -72,23 +70,22 @@ As a client waiting for server response, you should handle VetoException excepti
 A list of the available abort codes can be found in the CBCOM specification, in the chapter discussing about the PI01.
 
 Here follows such exception management. (See test method ''testBadCbcomVersion()'' in source ''src/testIntegration/org/jpos/jposext/cbcom/ClientCBCOMChannelTest.java'')
-<pre>
-		// Here, we force a bad cbcom protocol version
-		cfg.put("cbcom-protocol-version", "09");
-		channel.setConfiguration(cfg);
 
-		channel.connect();
-
-		try {
-			channel.send(msg);
-			channel.receive();
-			fail("A cbcom exception wrapped in a veto exception should have been thrown by channel");
-			channel.disconnect();
-		} catch (VetoException e) {
-			assertEquals(CBCOMException.class, e.getNested().getClass());
-			assertEquals(0x1E, ((CBCOMException) e.getNested()).getPI01Value());
-		}
-</pre>
+<code>// Here, we force a bad cbcom protocol version</code><br>
+<code>cfg.put("cbcom-protocol-version", "09");</code><br>
+<code>channel.setConfiguration(cfg);</code><br>
+<code></code><br>
+<code>channel.connect();</code><br>
+<code></code><br>
+<code>try {</code><br>
+<code>  channel.send(msg);</code><br>
+<code>  channel.receive();</code><br>
+<code>  fail("A cbcom exception wrapped in a veto exception should have been thrown by channel");</code><br>
+<code>  channel.disconnect();</code><br>
+<code>} catch (VetoException e) {</code><br>
+<code>  assertEquals(CBCOMException.class, e.getNested().getClass());</code><br>
+<code>  assertEquals(0x1E, ((CBCOMException) e.getNested()).getPI01Value());</code><br>
+<code>}</code><br>
 
 == Creating a CBCOM server to serve CBCOM client(s) ==
 Once again, nothing changes in the way you configure a CBCOM channel in a server deployment configuration, except that you have to declare some complementary properties required when using a CBCOMchannel in a server way.
