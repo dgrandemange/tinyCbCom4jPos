@@ -14,7 +14,7 @@ You can find two subsidiary sample modules in this project :
 == CBCOM message format ==
 All CBCOM IPDUs along their respective composition rules are implemented.
 When dealing with CBCOM messages, IPDU validity is checked against various rules (See IPDU factory ''org.jpos.jposext.cbcom.service.support.IPDUFactoryImpl'' class).   
-== Pseudo session timers ==
+== Timers ==
 === Role client ===
 * post-connection-timer,
 * non response timer (TNR)
@@ -31,12 +31,14 @@ NB : this implementation does not yet deal with all the network management part 
 === CBCOM and multiplexing ===
 Reading the CBCOM over TCP/IP specifications, requests can't be multiplexed in a CBCOM pseudo session.
 
-Specification says  : on one TCP/IP connection, one and one only CBCOM connection can be established. Several CBCOM connections can be established at the same time only if each of them has its own TCP/IP connection. 2 CBCOM connections mustn't share one solely TCP/IP connection. So, you should avoid using the CBCOMChannel in a QMUX.
+Specification says  : ''on one TCP/IP connection, one and one only CBCOM connection can be established. Several CBCOM connections can be established at the same time only if each of them has its own TCP/IP connection.''
+ 
+Well, 2 CBCOM connections mustn't share one solely TCP/IP connection. So, you should avoid using the CBCOMChannel within a MUX.
 
 === CBCOM and connection maintaining ===
 <p>Some of the CBCOM timers care about terminating the network communication (mostly for inactivity reason).
-Therefore it's quite paradoxical using the CBCOMChannel  with a ChannelAdaptor. Indeed, ChannelAdaptor's one purpose is to maintain the connection. But, considering CBCOM, this aspect should stay at the CBCOM level.</p>
-<p>NB : in the provided ''jpos/module/cbcomClientSimulator'' sample module, a ChannelAdaptor wraps a CBCOMChannel to act as a demo client. Launch it, and you will see that after some time of inactivity, the CBCOMChannel connection closes itself. Once this is done, the ChannelAdaptor reconnects it after ''reconnect-delay'' seconds.</p> 
+Therefore it's quite paradoxical using the CBCOMChannel  with a ChannelAdaptor. Indeed, ChannelAdaptor's one purpose is to maintain the connection. Connection maintain is part of the CBCOM specification and should stay at the CBCOM level.</p>
+<p>NB : still, in the provided ''jpos/module/cbcomClientSimulator'' sample module, i use a ChannelAdaptor that wraps a CBCOMChannel (because i needed something that can deploy easily) . Launch it, and you will see that after some time of inactivity, the CBCOMChannel connection is lost (this is due to CBCOM internal timers such as the pre-connection-timer or  the inactivity-veil-timer). Once the connection is lost, ChannelAdaptor 's behavior is to try to reconnect after a delay parameterized in property ''reconnect-delay''.</p> 
 
 == Creating a CBCOM client to request a distant CBCOM server ==
 Comparing to jPos existing channels, nothing changes in the way you use the CBCOMChannel.
@@ -100,7 +102,7 @@ State may change when receiving an IPDU : connection request, connection acknowl
 
 <p>To handle all of these workflow rules, the CBCOMChannel wraps a pseudo-session context. Within it, a state attribute wraps the current CBCOM pseudo-session state.  
 This state may be an instance among the 3 states mentioned above. All the 3 states  implement the ''IPseudoSessionState'' interface according to the common ''state design pattern'' : in such design, the ''IPseudoSessionState'' interface methods actually stand for all the events that can occur against a pseudo-session state. We can see these method as potential transitions between the 3 states.
-So back to our CBCOMChannel : when it receives some messages, it extracts the IPDU from it, and invoke the associated transition/method on current state.</p< 
+So back to our CBCOMChannel : when it receives some messages, it extracts the IPDU from it, and invoke the associated transition/method on current state.</p> 
 
 <p>Working with this design, pseudo-session management and logic are delegated from the CBCOM channel to the states implementations.
-But, as these implementations may also further need the underlying CBCOMChannel, a callback interface is provided to them that allows to give back the control to the CBCOM channel. This callback interface concentrate on CBCOMChannel main purpose that is : sending, receiving, and closing ...</p>
+But, as these implementations may also further need the underlying CBCOMChannel, a callback interface is provided to them that gives the control back to the CBCOM channel. This callback interface concentrate on CBCOMChannel main purpose that is : sending data, closing the connection...</p>
