@@ -8,6 +8,7 @@ import org.jpos.jposext.cbcom.model.IPDU;
 import org.jpos.jposext.cbcom.model.PI;
 import org.jpos.jposext.cbcom.service.IIPDUFactory;
 import org.jpos.jposext.cbcom.session.service.IChannelCallback;
+import org.jpos.jposext.cbcom.session.service.IIdentificationProtocolValidator;
 import org.jpos.jposext.cbcom.session.service.IPseudoSessionState;
 import org.jpos.jposext.cbcom.session.service.ISessionStateFactory;
 
@@ -94,7 +95,11 @@ public class PseudoSessionContext implements Cloneable {
 	private byte cbcomProtocolVersion;
 
 	private byte[] cb2aProtocolVersion;
-			
+
+	private byte protocolType;
+	
+	private IIdentificationProtocolValidator idProtValidator;
+	
 	public IPseudoSessionState getSessionState() {
 		return sessionState;
 	}
@@ -196,6 +201,10 @@ public class PseudoSessionContext implements Cloneable {
 		this.cbcomProtocolVersion = cbcomProtocolVersion;
 	}
 
+	public void setProtocolType(byte protocolType) {
+		this.protocolType = protocolType;
+	}	
+	
 	public void setCb2aProtocolVersion(byte[] cb2aProtocolVersion) {
 		this.cb2aProtocolVersion = cb2aProtocolVersion;
 	}
@@ -203,10 +212,22 @@ public class PseudoSessionContext implements Cloneable {
 	public byte getCbcomProtocolVersion() {
 		return cbcomProtocolVersion;
 	}
-
+	
+	public byte getProtocolType() {
+		return protocolType;
+	}
+	
 	public byte[] getCb2aProtocolVersion() {
 		return cb2aProtocolVersion;
 	}	
+
+	public IIdentificationProtocolValidator getIdProtValidator() {
+		return idProtValidator;
+	}
+
+	public void setIdProtValidator(IIdentificationProtocolValidator idProtValidator) {
+		this.idProtValidator = idProtValidator;
+	}
 	
 	@Override
 	public Object clone() throws CloneNotSupportedException {
@@ -221,7 +242,9 @@ public class PseudoSessionContext implements Cloneable {
 		clone.setStateFactory(this.getStateFactory());
 		clone.setTimerConfig(this.getTimerConfig());
 		clone.setCbcomProtocolVersion(this.cbcomProtocolVersion);
+		clone.setProtocolType(this.protocolType);
 		clone.setCb2aProtocolVersion(this.cb2aProtocolVersion);
+		clone.setIdProtValidator(this.idProtValidator);
 		
 		clone.setId(this.getId());
 		clone.setIpdu(this.getIpdu());

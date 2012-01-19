@@ -109,10 +109,11 @@ public class InitialState extends PseudoSessionStateAbstractImpl implements
 
 			// First, create a PI05
 			byte cbcomProtocolVersion = ctx.getCbcomProtocolVersion();
+			byte protocolType = ctx.getProtocolType();
 			byte[] cb2aProtocolVersion = ctx.getCb2aProtocolVersion();
 			byte[] pv05 = new byte[1 + 1 + cb2aProtocolVersion.length];
 			pv05[0] = cbcomProtocolVersion;		
-			pv05[1] = 0x02;			
+			pv05[1] = protocolType;			
 			System.arraycopy(cb2aProtocolVersion, 0, pv05, 2,
 					cb2aProtocolVersion.length);
 

@@ -11,7 +11,11 @@
 		
 		<!-- Protocols versions -->
 		<property name="cbcom-protocol-version" value="13" />
+		<property name="protocol-type" value="02" />
 		<property name="cb2a-protocol-version" value="123" />
+		
+		<!-- Protocols validator -->
+		<property name="identification-protocol-validator" value="org.jpos.jposext.cbcom.session.service.support.IdentificationProtocolValidatorImpl" />
 		
 		<!-- ======================================================================== -->
 		<!-- BEGIN Timers config (profile SERVER)                                     -->

@@ -13,7 +13,8 @@
 			Protocols versions
 			THese info will be used to compose the IPDU CN (PI05)  
 		-->
-		<property name="cbcom-protocol-version" value="11" />
+		<property name="cbcom-protocol-version" value="13" />
+		<property name="protocol-type" value="02" />
 		<property name="cb2a-protocol-version" value="123" />
 
 		<!-- ======================================================================== -->

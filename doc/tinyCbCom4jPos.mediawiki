@@ -24,7 +24,8 @@ NB : this implementation does not yet deal with all the network management part 
 * inter session timer,
 * response guarantee timer (TGR),
 * inactivity veil timer (TSI/TSM)
-
+== Protocols validation ==
+When configuring a CBCOMChannel in a server configuration, you can specify a validator class that will handle the protocols informations (PI05) received from a client. This class should implement the ''org.jpos.jposext.cbcom.session.service.IIdentificationProtocolValidator'' interface (see ''jpos/modules/cbcomSimulator/deploy/10_server_simulator.xml'' sample module).
 
 = Some recipee =
 == Caution ==
@@ -38,9 +39,11 @@ Well, 2 CBCOM connections mustn't share one solely TCP/IP connection. So, you sh
 === CBCOM and connection maintaining ===
 <p>Some of the CBCOM timers care about terminating the network communication (mostly for inactivity reason).
 Therefore it's quite paradoxical using the CBCOMChannel  with a ChannelAdaptor. Indeed, ChannelAdaptor's one purpose is to maintain the connection. Connection maintain is part of the CBCOM specification and should stay at the CBCOM level.</p>
-<p>NB : still, in the provided ''jpos/module/cbcomClientSimulator'' sample module, i use a ChannelAdaptor that wraps a CBCOMChannel (because i needed something that can deploy easily) . Launch it, and you will see that after some time of inactivity, the CBCOMChannel connection is lost (this is due to CBCOM internal timers such as the pre-connection-timer or  the inactivity-veil-timer). Once the connection is lost, ChannelAdaptor 's behavior is to try to reconnect after a delay parameterized in property ''reconnect-delay''.</p> 
+<p>NB : still, in the provided ''jpos/module/cbcomClientSimulator'' sample module, i use a ChannelAdaptor that wraps a CBCOMChannel (because i needed something that can deploy easily) . Launch it, and you will see that after some time of inactivity, the CBCOMChannel connection is lost (this is due to CBCOM internal timers such as the pre-connection-timer or  the inactivity-veil-timer). Once the connection is lost, ChannelAdaptor 's behavior is to try to reconnect after a delay parameterized in property ''reconnect-delay''.</p>   
+<p>There is also a OneShotChannelAdaptor that fits quite well to the CBCOMChannel as it does not maintain the connection. See more info on the OneShotChannelAdaptor here : [http://www.andyorrock.com/2009/05/implementing-the-oneshotchanneladaptor.html]  .</p> 
 
 == Creating a CBCOM client to request a distant CBCOM server ==
+=== The manual way ===
 Comparing to jPos existing channels, nothing changes in the way you use the CBCOMChannel.
  
 <p>You first instantiate the channel, connect to the server, send your message, wait for response, process it, and finally disconnect.
@@ -65,7 +68,7 @@ The only thing to care about is to properly configure your instantiated channel 
 
 NB : full source code is available under ''src/testIntegration/org/jpos/jposext/cbcom/ClientCBCOMChannelTest.java''.
 
-=== The VetoException case ===
+==== The VetoException case ====
 <p>As a client waiting for server response, you should handle VetoException exceptions thrown by the CBCOMChannel. These may occurred when the server decides to abort the pseudo session. In this case, the VetoException nests a CBCOMException from which you can retrieve the reason (abort code) explaining why the server has aborted the pseudo session. 
 A list of the available abort codes can be found in the CBCOM specification, in the chapter discussing about the PI01.</p>
 
@@ -86,6 +89,9 @@ Here follows such exception management. (See test method ''testBadCbcomVersion()
 <code>  assertEquals(CBCOMException.class, e.getNested().getClass());</code><br>
 <code>  assertEquals(0x1E, ((CBCOMException) e.getNested()).getPI01Value());</code><br>
 <code>}</code><br>
+
+=== Using a Q2 registered OneShotChannelAdaptor ===
+As previously said, a CBCOMChannel  shouldn't be configured in a ChannelAdaptor configuration. But you can configured it in a OneShotChannelAdaptor, as long as the CBCOMChannel is not configured to maintain the connection (a non yet implemented feature).
 
 == Creating a CBCOM server to serve CBCOM client(s) ==
 Once again, nothing changes in the way you configure a CBCOM channel in a server deployment configuration, except that you have to declare some complementary properties required when using a CBCOMchannel in a server way.

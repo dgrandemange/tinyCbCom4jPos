@@ -37,6 +37,7 @@ import org.jpos.jposext.cbcom.service.support.IPDUFactoryImpl;
 import org.jpos.jposext.cbcom.session.model.PseudoSessionContext;
 import org.jpos.jposext.cbcom.session.model.TimerConfig;
 import org.jpos.jposext.cbcom.session.service.IChannelCallback;
+import org.jpos.jposext.cbcom.session.service.IIdentificationProtocolValidator;
 import org.jpos.jposext.cbcom.session.service.IPseudoSessionState;
 import org.jpos.jposext.cbcom.session.service.ISessionStateFactory;
 import org.jpos.jposext.cbcom.session.service.support.SessionStateFactoryImpl;
@@ -346,14 +347,14 @@ public class CBCOMChannel extends BaseChannel {
 					if (IPDUEnum.AB == lastReceivedIpduType) {
 						byte abortCode;
 						try {
-							abortCode = lastIpduReceived
-									.findPiByPIEnum(PIEnum.PI01)
-									.getParamValue()[0];
+							abortCode = lastIpduReceived.findPiByPIEnum(
+									PIEnum.PI01).getParamValue()[0];
 						} catch (Exception e) {
 							abortCode = 0x04;
 						}
 						if ((0x80 != abortCode) || (0x00 != abortCode)) {
-							throw new VetoException(new CBCOMException(abortCode));
+							throw new VetoException(new CBCOMException(
+									abortCode));
 						}
 					}
 
@@ -624,10 +625,40 @@ public class CBCOMChannel extends BaseChannel {
 				false);
 		this.ctx.setCbcomProtocolVersion(cbcomProtocolVersion[0]);
 
+		String strProtocolType = cfg.get("protocol-type", "02");
+		byte[] protocolType = ISOUtil.str2bcd(strProtocolType, false);
+		this.ctx.setProtocolType(protocolType[0]);
+
 		String strCB2AProtocolVersion = cfg.get("cb2a-protocol-version", "123");
 		byte[] cb2aProtocolVersion = ISOUtil.str2bcd(strCB2AProtocolVersion,
 				false);
 		this.ctx.setCb2aProtocolVersion(cb2aProtocolVersion);
+
+		String strIdProtValidatorClass = cfg.get(
+				"identification-protocol-validator", null);
+		IIdentificationProtocolValidator idProtValidator;
+		try {
+			idProtValidator = createIdProtValidator(strIdProtValidatorClass);
+			this.ctx.setIdProtValidator(idProtValidator);
+		} catch (Exception e) {
+			throw new ConfigurationException(e);
+		}
+	}
+
+	protected IIdentificationProtocolValidator createIdProtValidator(
+			String strIdProtValidatorClass) throws ClassNotFoundException,
+			InstantiationException, IllegalAccessException {
+		IIdentificationProtocolValidator validator = null;
+		
+		if (null != strIdProtValidatorClass) {
+			Class<?> clazz = Class.forName(strIdProtValidatorClass);
+			if (IIdentificationProtocolValidator.class.isAssignableFrom(clazz)) {
+				validator = (IIdentificationProtocolValidator) clazz
+						.newInstance();
+			}
+		}
+		
+		return validator;
 	}
 
 	@Override
@@ -678,6 +709,14 @@ public class CBCOMChannel extends BaseChannel {
 			evt.addMessage(e);
 			// TODO Think about this case
 			e.printStackTrace();
+		} catch (VetoException e) {
+			if (e.getNested() instanceof CBCOMException) {
+				byte pi01Value = ((CBCOMException) e.getNested())
+						.getPI01Value();
+				evt.addMessage(String.format(
+						"CBCOM pseudo session abort code=0x%x", pi01Value));
+			}
+			throw e;
 		} catch (ISOException e) {
 			evt.addMessage(e);
 			throw e;

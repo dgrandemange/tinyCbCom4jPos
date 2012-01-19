@@ -17,8 +17,6 @@ import org.jpos.jposext.cbcom.session.model.PseudoSessionContext;
 import org.jpos.jposext.cbcom.session.model.TimerConfig;
 import org.jpos.jposext.cbcom.session.service.IPseudoSessionState;
 import org.jpos.jposext.cbcom.session.service.support.server.LoggedOffState;
-import org.jpos.util.LogEvent;
-import org.jpos.util.Logger;
 
 /**
  * Abstract state class providing default behaviors when receiving a message
@@ -194,7 +192,7 @@ public abstract class PseudoSessionStateAbstractImpl implements
 			String state = this.getClass().getName();
 			String transition = ste[2].getMethodName();
 			String mesg = String
-			.format("ctxId=%d, code=%d [%s<-%s]", ctx.getId(), pv01, state, transition);
+			.format("ctxId=%d, code=0x%x [%s<-%s]", ctx.getId(), pv01, state, transition);
 			
 			ctx.getChannelCallback().log("cbcom-ipdu-ab", mesg);
 		} catch (Exception e) {

@@ -118,21 +118,12 @@ public class InitialState extends PseudoSessionStateAbstractImpl implements
 			byte[] clientCb2aVersion = new byte[] { pi05.getParamValue()[2],
 					pi05.getParamValue()[3] };
 
-			if ((byte) 0x02 != clientProtocolType) {
-				// Transactional CB2A protocol type was expected
-				abortCode = 0x1F;
+			if (null != ctx.getIdProtValidator()) {
+				abortCode = ctx.getIdProtValidator().validate(ctx,
+						clientCbcomVersion, clientProtocolType,
+						clientCb2aVersion);
 			} else {
-				// Check this : version 1.1 <= Client CBCOM version <= Server
-				// CBCOM version
-				if ((ctx.getCbcomProtocolVersion() < clientCbcomVersion)
-						|| (clientCbcomVersion < 0x11)) {
-					abortCode = 0x1E;
-				} else {
-					// TODO Check CB2A version if required
-
-					// When CB2A version is OK, set abortCode to 0x00
-					abortCode = 0x00;
-				}
+				abortCode = 0x00;
 			}
 		}
 
