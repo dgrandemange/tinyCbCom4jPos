@@ -1,0 +1,5 @@
+<?xml version='1.0' encoding="iso-8859-1" ?>
+
+<QThreadPoolExecutor name="ipdu-mgmt-tasks-executor"
+	class="org.jpos.q2.qbean.QThreadPoolExecutor" type="fixed"
+	corePoolSize="100" terminationTimer="30" logger="Q2" />

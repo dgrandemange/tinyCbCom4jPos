@@ -1,0 +1,71 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>com.github.dgrandemange</groupId>
+	<artifactId>tinycbcom4jpos</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>cbcom4jpos</name>
+	<description>Some cbcom implementation for the jPos framework</description>
+
+	<properties>
+		<cbcom.version>0.0.1</cbcom.version>
+		<jpos.version>1.9.6</jpos.version>
+
+		<junit.version>4.11</junit.version>
+
+		<maven-compiler-plugin.version>2.5.1</maven-compiler-plugin.version>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.github.dgrandemange</groupId>
+			<artifactId>cbcom</artifactId>
+			<version>${cbcom.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.jpos</groupId>
+			<artifactId>jpos</artifactId>
+			<version>${jpos.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>${junit.version}</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<sourceDirectory>jpos/modules/cbcom/src</sourceDirectory>
+		<testSourceDirectory>src/test</testSourceDirectory>
+		<resources>
+			<resource>
+				<directory>src/testIntegration</directory>
+				<excludes>
+					<exclude>**/*.java</exclude>
+				</excludes>
+			</resource>
+		</resources>
+		<testResources>
+			<testResource>
+				<directory>src/test</directory>
+				<excludes>
+					<exclude>**/*.java</exclude>
+				</excludes>
+			</testResource>
+		</testResources>
+		<plugins>
+			<plugin>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>${maven-compiler-plugin.version}</version>
+				<configuration>
+					<source />
+					<target />
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

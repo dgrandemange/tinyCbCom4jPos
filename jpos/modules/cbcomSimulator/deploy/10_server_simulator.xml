@@ -121,7 +121,16 @@
 		<!-- ======================================================================== -->
 		<!-- END   Timers config (time unit=seconds)                                  -->
 		<!-- ======================================================================== -->
-		
+
+		<!-- +++++++++++++++++++++++++++ -->
+		<!-- BEGIN Thread pool executors -->				
+		<!-- +++++++++++++++++++++++++++ -->
+		<property name="ipdu-mgmt-executor-qbean-ref" value="ipdu-mgmt-tasks-executor" />
+		<property name="pseudosession-timer-mgmt-executor-qbean-ref" value="pseudosession-timer-tasks-executor" />
+		<!-- +++++++++++++++++++++++++++ -->
+		<!-- END Thread pool executors -->				
+		<!-- +++++++++++++++++++++++++++ -->
+
 		<!-- Trace CBCOM messages -->
 		<property name="hexdump-CBCOM" value="true" />
 		

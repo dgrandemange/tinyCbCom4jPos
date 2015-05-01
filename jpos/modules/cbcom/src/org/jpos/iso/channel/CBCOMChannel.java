@@ -1,6 +1,5 @@
 package org.jpos.iso.channel;
 
-import java.io.ByteArrayInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -10,39 +9,41 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
 
 import org.jpos.core.Configuration;
 import org.jpos.core.ConfigurationException;
 import org.jpos.iso.BaseChannel;
 import org.jpos.iso.ISOException;
 import org.jpos.iso.ISOFilter;
+import org.jpos.iso.ISOFilter.VetoException;
 import org.jpos.iso.ISOMsg;
 import org.jpos.iso.ISOPackager;
 import org.jpos.iso.ISOUtil;
-import org.jpos.iso.ISOFilter.VetoException;
-import org.jpos.jposext.cbcom.exception.CBCOMBadIPDUException;
-import org.jpos.jposext.cbcom.exception.CBCOMException;
-import org.jpos.jposext.cbcom.exception.CBCOMSessionClosedException;
-import org.jpos.jposext.cbcom.exception.CBCOMSessionException;
-import org.jpos.jposext.cbcom.exception.CBCOMSessionStateException;
-import org.jpos.jposext.cbcom.model.IPDU;
-import org.jpos.jposext.cbcom.model.IPDUEnum;
-import org.jpos.jposext.cbcom.model.PIEnum;
-import org.jpos.jposext.cbcom.service.IIPDUExtractionService;
-import org.jpos.jposext.cbcom.service.support.IPDUFactoryImpl;
-import org.jpos.jposext.cbcom.session.model.PseudoSessionContext;
-import org.jpos.jposext.cbcom.session.model.TimerConfig;
-import org.jpos.jposext.cbcom.session.service.IChannelCallback;
-import org.jpos.jposext.cbcom.session.service.IIdentificationProtocolValidator;
-import org.jpos.jposext.cbcom.session.service.IPseudoSessionState;
-import org.jpos.jposext.cbcom.session.service.ISessionStateFactory;
-import org.jpos.jposext.cbcom.session.service.support.SessionStateFactoryImpl;
+import org.jpos.q2.qbean.QThreadPoolExecutor;
 import org.jpos.util.LogEvent;
 import org.jpos.util.Logger;
+import org.jpos.util.NameRegistrar.NotFoundException;
+
+import fr.dgrandemange.cbcom.exception.CBCOMBadIPDUException;
+import fr.dgrandemange.cbcom.exception.CBCOMException;
+import fr.dgrandemange.cbcom.exception.CBCOMSessionClosedException;
+import fr.dgrandemange.cbcom.exception.CBCOMSessionStateException;
+import fr.dgrandemange.cbcom.model.IPDU;
+import fr.dgrandemange.cbcom.model.IPDUEnum;
+import fr.dgrandemange.cbcom.model.PIEnum;
+import fr.dgrandemange.cbcom.service.IIPDUExtractionService;
+import fr.dgrandemange.cbcom.service.support.IPDUExtractionServiceImpl;
+import fr.dgrandemange.cbcom.service.support.IPDUFactoryImpl;
+import fr.dgrandemange.cbcom.session.model.PseudoSessionContext;
+import fr.dgrandemange.cbcom.session.model.TimerConfig;
+import fr.dgrandemange.cbcom.session.service.IIdentificationProtocolValidator;
+import fr.dgrandemange.cbcom.session.service.IPseudoSessionState;
+import fr.dgrandemange.cbcom.session.service.ISessionStateFactory;
+import fr.dgrandemange.cbcom.session.service.IThreadPoolExecutorProvider;
+import fr.dgrandemange.cbcom.session.service.support.ChannelCallbackImpl;
+import fr.dgrandemange.cbcom.session.service.support.SessionStateFactoryImpl;
 
 /**
  * A channel implementation that internally manage the CBCOM pseudo session
@@ -51,163 +52,9 @@ import org.jpos.util.Logger;
  * @author dgrandemange
  * 
  */
+@SuppressWarnings("unchecked")
 public class CBCOMChannel extends BaseChannel {
 
-	/**
-	 * IPDU extraction service
-	 * 
-	 * @author dgrandemange
-	 * 
-	 */
-	class IPDUExtractionServiceImpl implements IIPDUExtractionService {
-
-		/**
-		 * IPDU len as read in 4 bytes header
-		 */
-		private int ipduLen;
-
-		private ByteArrayInputStream ipduIs;
-
-		/**
-		 * @param bufIpdu
-		 * @param ipduLen
-		 * @throws CBCOMException
-		 */
-		public IPDUExtractionServiceImpl(byte[] bufIpdu, int ipduLen) {
-			super();
-			this.ipduLen = ipduLen;
-			this.ipduIs = new ByteArrayInputStream(bufIpdu);
-		}
-
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @see
-		 * org.jpos.jposext.cbcom.service.IIPDUExtractionService#getApdu(int)
-		 */
-		public byte[] getApdu(int apduLen) {
-			byte[] buf = new byte[apduLen];
-			ipduIs.read(buf, 0, apduLen);
-			return buf;
-		}
-
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @see
-		 * org.jpos.jposext.cbcom.service.IIPDUExtractionService#getIpduLGI()
-		 */
-		public int getIpduLGI() {
-			byte[] buf = new byte[1];
-			ipduIs.read(buf, 0, 1);
-			return buf[0];
-		}
-
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @see
-		 * org.jpos.jposext.cbcom.service.IIPDUExtractionService#getIpduLen()
-		 */
-		public int getIpduLen() {
-			return ipduLen;
-		}
-
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @see
-		 * org.jpos.jposext.cbcom.service.IIPDUExtractionService#getIpduPGI()
-		 */
-		public byte getIpduPGI() {
-			byte[] buf = new byte[1];
-			ipduIs.read(buf, 0, 1);
-			return buf[0];
-		}
-
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @see
-		 * org.jpos.jposext.cbcom.service.IIPDUExtractionService#getIpduParams
-		 * (int)
-		 */
-		public byte[] getIpduParams(int lgi) {
-			byte[] buf = new byte[lgi];
-			ipduIs.read(buf, 0, lgi);
-			return buf;
-		}
-
-	}
-
-	/**
-	 * Callback interface <BR>
-	 * Callbacks are called by the CBCOM state machine<BR>
-	 * This implementation mainly rely on a CBCOMChannel instance<BR>
-	 * 
-	 * @author dgrandemange
-	 * 
-	 */
-	class ChannelCallbackImpl implements IChannelCallback {
-
-		private CBCOMChannel channel;
-
-		public ChannelCallbackImpl(CBCOMChannel channel) {
-			super();
-			this.channel = channel;
-		}
-
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @see
-		 * org.jpos.jposext.cbcom.session.server.service.IChannelCallback#send
-		 * (byte[])
-		 */
-		public void send(byte[] b, boolean doCount)
-				throws CBCOMSessionException {
-			try {
-				// Delegate the send operation to the underlying channel
-				channel.send(b, doCount);
-			} catch (IOException e) {
-				throw new CBCOMSessionException(e);
-			} catch (ISOException e) {
-				throw new CBCOMSessionException(e);
-			}
-		}
-
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @see
-		 * org.jpos.jposext.cbcom.session.server.service.IChannelCallback#close
-		 * ()
-		 */
-		public void close() throws CBCOMSessionException {
-			try {
-				// Delegate the close operation to the underlying channel
-				channel.closeSocket();
-			} catch (IOException e) {
-				// Safe to ignore, it may be already closed
-			}
-		}
-
-		/**
-		 * @param tag
-		 * @param msg
-		 */
-		public void log(String tag, Object msg) {
-			LogEvent evt = new LogEvent(channel, tag);
-			evt.addMessage(msg);
-			Logger.log(evt);
-		}
-
-	};
-
-	/**
-	 * @author dgrandemange
-	 * 
-	 */
 	class IncomingApduNotifier {
 
 		private byte[] apdu;
@@ -261,10 +108,6 @@ public class CBCOMChannel extends BaseChannel {
 
 	}
 
-	/**
-	 * @author dgrandemange
-	 * 
-	 */
 	class IncomingIpduMgmtTask implements Callable<Object> {
 
 		/**
@@ -448,9 +291,10 @@ public class CBCOMChannel extends BaseChannel {
 				Method transitionMethod = null;
 
 				try {
-					// TODO Optimisation : recherche de la méthode dans une
-					// map statique pré-peuplée (statiquement par exemple)
-					transitionMethod = sessionCtx.getSessionState().getClass()
+					// TODO Method search optimization ?
+					transitionMethod = sessionCtx
+							.getSessionState()
+							.getClass()
 							.getMethod(transitionName,
 									PseudoSessionContext.class);
 				} catch (SecurityException e) {
@@ -492,48 +336,62 @@ public class CBCOMChannel extends BaseChannel {
 		}
 	}
 
+	class ThreadPoolExecutorProviderImpl implements IThreadPoolExecutorProvider {
+
+		private String executorName;
+
+		public ThreadPoolExecutorProviderImpl(String executorName) {
+			super();
+			this.executorName = executorName;
+		}
+
+		public <T extends ThreadPoolExecutor> T provide(Class<T> clazz) {
+			T exec;
+			try {
+				exec = QThreadPoolExecutor.getThreadPoolExecutor(executorName,
+						clazz);
+			} catch (NotFoundException e) {
+				exec = null;
+			}
+			return exec;
+		}
+	}
+
 	private static IPDUFactoryImpl ipduFactory = new IPDUFactoryImpl();
 
 	private static ISessionStateFactory stateFactoryServer;
 
 	private static ISessionStateFactory stateFactoryClient;
 
-	private static ExecutorService ipduMgmtTaskExecutor;
-
-	private static ScheduledExecutorService defferedTaskExecutor;
+	private IThreadPoolExecutorProvider ipduMgmtTaskExecutorProvider;
 
 	static {
 		stateFactoryServer = new SessionStateFactoryImpl();
 		((SessionStateFactoryImpl) stateFactoryServer)
 				.setAvailableStates(
 						new Class[] {
-								org.jpos.jposext.cbcom.session.service.support.server.InitialState.class,
-								org.jpos.jposext.cbcom.session.service.support.server.ConnectedState.class,
-								org.jpos.jposext.cbcom.session.service.support.server.LoggedOffState.class },
-						org.jpos.jposext.cbcom.session.service.support.server.InitialState.class);
+								fr.dgrandemange.cbcom.session.service.support.server.InitialState.class,
+								fr.dgrandemange.cbcom.session.service.support.server.ConnectedState.class,
+								fr.dgrandemange.cbcom.session.service.support.server.LoggedOffState.class },
+						fr.dgrandemange.cbcom.session.service.support.server.InitialState.class,
+						fr.dgrandemange.cbcom.session.service.support.server.LoggedOffState.class);
 
 		stateFactoryClient = new SessionStateFactoryImpl();
 		((SessionStateFactoryImpl) stateFactoryClient)
 				.setAvailableStates(
 						new Class[] {
-								org.jpos.jposext.cbcom.session.service.support.client.InitialState.class,
-								org.jpos.jposext.cbcom.session.service.support.client.ConnectedState.class,
-								org.jpos.jposext.cbcom.session.service.support.client.LoggedOffState.class },
-						org.jpos.jposext.cbcom.session.service.support.client.InitialState.class);
-
-		// TODO Thread executor pool size should be parameterized
-		ipduMgmtTaskExecutor = Executors.newFixedThreadPool(10);
-
-		// TODO Thread executor pool size should be parameterized
-		defferedTaskExecutor = Executors.newScheduledThreadPool(10);
-
+								fr.dgrandemange.cbcom.session.service.support.client.InitialState.class,
+								fr.dgrandemange.cbcom.session.service.support.client.ConnectedState.class,
+								fr.dgrandemange.cbcom.session.service.support.client.LoggedOffState.class },
+						fr.dgrandemange.cbcom.session.service.support.client.InitialState.class,
+						fr.dgrandemange.cbcom.session.service.support.client.LoggedOffState.class);
 	}
 
 	private PseudoSessionContext ctx;
 
-	private Future<Object> ipduMgmtTaskFuture;
+	private transient Future<Object> ipduMgmtTaskFuture;
 
-	private IncomingApduNotifier incomingApduNotifier;
+	private transient IncomingApduNotifier incomingApduNotifier;
 
 	private boolean logCBCOM;
 
@@ -561,7 +419,8 @@ public class CBCOMChannel extends BaseChannel {
 	void init() {
 		ctx = new PseudoSessionContext();
 		ctx.setIpduFactory(ipduFactory);
-		ctx.setDefferedTaskExecutor(CBCOMChannel.defferedTaskExecutor);
+		// ctx.setPseudoSessionTimerTasksExecutorProvider(new
+		// PseudoSessionTimerTasksExecutorProvider(this));
 	}
 
 	@Override
@@ -643,13 +502,47 @@ public class CBCOMChannel extends BaseChannel {
 		} catch (Exception e) {
 			throw new ConfigurationException(e);
 		}
+
+		/**
+		 * Add two properties : 1. a reference to a Q2 registered fixed thread
+		 * pool executor (dedicated to ipdu management tasks) 2. a reference to
+		 * a Q2 registered scheduled thread pool executor (dedicated to pseudo
+		 * session timers management)
+		 * 
+		 * Configuration should fail if referenced executors are not found
+		 */
+		String lIpduMgmtTaskExecutorQName = cfg.get(
+				"ipdu-mgmt-executor-qbean-ref", null);
+		// TODO Should we check executor registration here ?  
+//		try {
+//			QThreadPoolExecutor
+//					.getThreadPoolExecutor(lIpduMgmtTaskExecutorQName);
+//		} catch (NotFoundException e) {
+//			throw new ConfigurationException(e);
+//		}
+
+		String lPseudoSessionTimerTaskExecutorQName = cfg.get(
+				"pseudosession-timer-mgmt-executor-qbean-ref", null);
+		// TODO Should we check executor registration here ?
+//		try {
+//			QThreadPoolExecutor
+//					.getThreadPoolExecutor(lPseudoSessionTimerTaskExecutorQName);
+//		} catch (NotFoundException e) {
+//			throw new ConfigurationException(e);
+//		}
+
+		this.ipduMgmtTaskExecutorProvider = new ThreadPoolExecutorProviderImpl(
+				lIpduMgmtTaskExecutorQName);
+		
+		ctx.setPseudoSessionTimerTasksExecutorProvider(new ThreadPoolExecutorProviderImpl(
+				lPseudoSessionTimerTaskExecutorQName));
 	}
 
 	protected IIdentificationProtocolValidator createIdProtValidator(
 			String strIdProtValidatorClass) throws ClassNotFoundException,
 			InstantiationException, IllegalAccessException {
 		IIdentificationProtocolValidator validator = null;
-		
+
 		if (null != strIdProtValidatorClass) {
 			Class<?> clazz = Class.forName(strIdProtValidatorClass);
 			if (IIdentificationProtocolValidator.class.isAssignableFrom(clazz)) {
@@ -657,7 +550,7 @@ public class CBCOMChannel extends BaseChannel {
 						.newInstance();
 			}
 		}
-		
+
 		return validator;
 	}
 
@@ -666,6 +559,16 @@ public class CBCOMChannel extends BaseChannel {
 		LogEvent evt = new LogEvent(this, "receive");
 		ISOMsg m = null;
 		byte[] apdu = null;
+
+		ThreadPoolExecutor ipduMgmtTaskExecutor = this.ipduMgmtTaskExecutorProvider
+				.provide(ThreadPoolExecutor.class);
+
+		if (null == ipduMgmtTaskExecutor) {
+			String err = "Unable to retrieve ipdu mgr task executor service";
+			evt.addMessage(err);
+			Logger.log(evt);
+			throw new ISOException(err);
+		}
 
 		if ((null == ipduMgmtTaskFuture) || (ipduMgmtTaskFuture.isDone())
 				|| (ipduMgmtTaskFuture.isCancelled())) {
@@ -759,7 +662,7 @@ public class CBCOMChannel extends BaseChannel {
 	 * 
 	 * @throws IOException
 	 */
-	protected void closeSocket() throws IOException {
+	public void closeSocket() throws IOException {
 		Socket socket = getSocket();
 		if (socket != null) {
 			try {
@@ -910,6 +813,7 @@ public class CBCOMChannel extends BaseChannel {
 		CBCOMChannel clone = (CBCOMChannel) super.clone();
 
 		clone.logCBCOM = this.logCBCOM;
+		clone.ipduMgmtTaskExecutorProvider = this.ipduMgmtTaskExecutorProvider;
 
 		try {
 			clone.ctx = (PseudoSessionContext) ctx.clone();

@@ -9,11 +9,12 @@ import junit.framework.TestCase;
 import org.jpos.core.Configuration;
 import org.jpos.core.SimpleConfiguration;
 import org.jpos.iso.ISOException;
+import org.jpos.iso.ISOFilter.VetoException;
 import org.jpos.iso.ISOMsg;
 import org.jpos.iso.ISOPackager;
-import org.jpos.iso.ISOFilter.VetoException;
 import org.jpos.iso.channel.CBCOMChannel;
-import org.jpos.jposext.cbcom.exception.CBCOMException;
+
+import fr.dgrandemange.cbcom.exception.CBCOMException;
 
 public class ClientCBCOMChannelTest extends TestCase {
 

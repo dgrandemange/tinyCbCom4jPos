@@ -87,7 +87,9 @@ public class GenericPackagerEntityResolverAble extends GenericPackager {
 		reader.setErrorHandler(handler);
 		reader.setEntityResolver(new EntityResolver() {
 
-			@Override
+			/* (non-Javadoc)
+			 * @see org.xml.sax.EntityResolver#resolveEntity(java.lang.String, java.lang.String)
+			 */
 			public InputSource resolveEntity(String publicId, String systemId)
 					throws SAXException, IOException {
 				InputSource res = null;

@@ -14,13 +14,14 @@ import org.jpos.iso.ISOException;
 import org.jpos.iso.ISOMsg;
 import org.jpos.iso.ISOUtil;
 import org.jpos.iso.packager.GenericPackager;
-import org.jpos.jposext.cbcom.exception.CBCOMException;
-import org.jpos.jposext.cbcom.model.IPDU;
-import org.jpos.jposext.cbcom.model.IPDUEnum;
-import org.jpos.jposext.cbcom.model.PI;
-import org.jpos.jposext.cbcom.model.PIEnum;
-import org.jpos.jposext.cbcom.service.IIPDUExtractionService;
-import org.jpos.jposext.cbcom.service.support.IPDUFactoryImpl;
+
+import fr.dgrandemange.cbcom.exception.CBCOMException;
+import fr.dgrandemange.cbcom.model.IPDU;
+import fr.dgrandemange.cbcom.model.IPDUEnum;
+import fr.dgrandemange.cbcom.model.PI;
+import fr.dgrandemange.cbcom.model.PIEnum;
+import fr.dgrandemange.cbcom.service.IIPDUExtractionService;
+import fr.dgrandemange.cbcom.service.support.IPDUFactoryImpl;
 
 /**
  * This class operates some integration tests against a cbcom simulator instance (see jpos/modules/cbcomSimulator)
